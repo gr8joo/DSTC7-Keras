@@ -1,0 +1,7 @@
+########
+data/*
+train_data/*
+valid_data/*
+__pycache__
+models/__pycache__
+scripts/__pycache___
