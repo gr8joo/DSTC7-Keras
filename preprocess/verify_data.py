@@ -1,17 +1,17 @@
 import os
 import numpy as np
 
-train_context = np.load('train_data/train_context.npy') # np.load('train_data/train_context_10.npy')#
-train_context_len = np.load('train_data/train_context_len.npy')# np.load('train_data/train_context_len_10.npy')#
-train_target = np.load('train_data/train_target.npy')# np.load('train_data/train_target_10.npy')#
-train_options = np.load('train_data/train_options.npy')# np.load('train_data/train_options_10.npy')#
-train_options_len = np.load('train_data/train_options_len.npy')# np.load('train_data/train_options_len_10.npy')#
+train_context = np.load('train_data/stem_train_context.npy') # np.load('train_data/train_context.npy')#
+train_context_len = np.load('train_data/stem_train_context_len.npy')# np.load('train_data/train_context_len.npy')#
+train_target = np.load('train_data/stem_train_target.npy')# np.load('train_data/train_target.npy')#
+train_options = np.load('train_data/stem_train_options.npy')# np.load('train_data/train_options.npy')#
+train_options_len = np.load('train_data/stem_train_options_len.npy')# np.load('train_data/train_options_len.npy')#
 
-valid_context = np.load('valid_data/valid_context.npy')# np.load('valid_data/valid_context_10.npy')#
-valid_context_len = np.load('valid_data/valid_context_len.npy')# np.load('valid_data/valid_context_len_10.npy')#
-valid_target = np.load('valid_data/valid_target.npy')# np.load('valid_data/valid_target_10.npy')#
-valid_options = np.load('valid_data/valid_options.npy')# np.load('valid_data/valid_options_10.npy')#
-valid_options_len = np.load('valid_data/valid_options_len.npy')# np.load('valid_data/valid_options_len_10.npy')#
+valid_context = np.load('valid_data/stem_valid_context.npy')# np.load('valid_data/valid_context.npy')#
+valid_context_len = np.load('valid_data/stem_valid_context_len.npy')# np.load('valid_data/valid_context_len.npy')#
+valid_target = np.load('valid_data/stem_valid_target.npy')# np.load('valid_data/valid_target.npy')#
+valid_options = np.load('valid_data/stem_valid_options.npy')# np.load('valid_data/valid_options.npy')#
+valid_options_len = np.load('valid_data/stem_valid_options_len.npy')# np.load('valid_data/valid_options_len.npy')#
 
 print("====================================Train====================================")
 print("context: ", train_context.shape)

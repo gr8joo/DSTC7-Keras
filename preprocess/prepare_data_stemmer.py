@@ -8,9 +8,10 @@ import functools
 
 import tensorflow as tf
 import numpy as np
-import random as rd
 
+import stemmer
 from locations import create_data_locations
+
 
 tf.flags.DEFINE_integer(
     "min_word_frequency", 1, "Minimum frequency of words in the vocabulary")
@@ -64,48 +65,13 @@ def process_dialog(dialog):
     # Create the next utterance options and the target label
     correct_answer = dialog['options-for-correct-answers'][0]
     target_id = correct_answer['candidate-id']
-    target_answer = "!)@(#*$&%^, This will be replaced anyway"
-    # print(type(target_answer))
     target_index = None
-    cnt = 0
-    utterances_row=[]
-    found_target = False
     for i, utterance in enumerate(dialog['options-for-next']):
         if utterance['candidate-id'] == target_id:
-            if found_target == True:
-                print("Found twice.... Something must me wrong")
-                break
-            target_answer = utterance['utterance'] + " __eou__ "
-            utterances_row.append(target_answer)
-            cnt = cnt+1
-            found_target = True
-            if cnt == 10:
-                break
+            target_index = i
+        row.append(utterance['utterance'] + " __eou__ ")
 
-        elif cnt<9:
-            utterances_row.append(utterance['utterance'] + " __eou__ ")
-            cnt = cnt+1
-
-        # When len(utterances_row) is 9
-        else:
-            if found_target is False:
-                continue
-            else:
-                utterances_row.append(utterance['utterance'] + " __eou__ ")
-                cnt = cnt+1
-                break
-
-
-    rd.shuffle(utterances_row)
-    # print(len(utterances_row), cnt)
-    # print(target_answer)
-    # print(type(utterances_row[8]))
-
-    target_index = utterances_row.index(target_answer)
-    # print(target_index)
-    row.extend(utterances_row)
-
-    if target_index is None or found_target is False:
+    if target_index is None:
         print('Correct answer not found in options-for-next - example {}. Setting 0 as the correct index'.format(dialog['example-id']))
     else:
         row.append(target_index)
@@ -134,7 +100,19 @@ def create_utterance_iter(input_iter):
     for row in input_iter:
         all_utterances = []
         context = row[0]
-        next_utterances = row[1:11]
+        next_utterances = row[1:101]
+
+        ###################### stemmer ######################
+        new_context = stemmer.stem_sentence(context)
+        new_next_utterances = []
+        for utterance in next_utterances:
+            new_utterance = stemmer.stem_sentence(utterance)
+            new_next_utterances.append(new_utterance)
+
+        context = new_context
+        next_utterances = new_next_utterances
+        #####################################################
+
         all_utterances.append(context)
         all_utterances.extend(next_utterances)
         for utterance in all_utterances:
@@ -163,7 +141,20 @@ def transform_sentence(sequence, vocab_processor):
 def create_example_nparray_format(row, vocab):
 
     context = row[0]
-    next_utterances = row[1:11]
+    next_utterances = row[1:101]
+
+
+    ######################### stemmer ########################
+    new_context = stemmer.stem_sentence(context)
+    new_next_utterances = []
+    for utterance in next_utterances:
+        new_utterance = stemmer.stem_sentence(utterance)
+        new_next_utterances.append(new_utterance)
+
+    context = new_context
+    next_utterances = new_next_utterances
+    ##########################################################
+
     target = row[-1]
 
     context_transformed = transform_sentence(context, vocab)
@@ -251,11 +242,11 @@ if __name__ == "__main__":
     options = np.array(options)
     options_len = np.array(options_len)
 
-    np.save(loc.red_train_context_path, context)
-    np.save(loc.red_train_context_len_path, context_len)
-    np.save(loc.red_train_target_path, target)
-    np.save(loc.red_train_options_path, options)
-    np.save(loc.red_train_options_len_path, options_len)
+    np.save(loc.stem_train_context_path, context)
+    np.save(loc.stem_train_context_len_path, context_len)
+    np.save(loc.stem_train_target_path, target)
+    np.save(loc.stem_train_options_path, options)
+    np.save(loc.stem_train_options_len_path, options_len)
     print("Done.")
 
     # Create nparray of Valdation set
@@ -271,9 +262,9 @@ if __name__ == "__main__":
     options = np.array(options)
     options_len = np.array(options_len)
 
-    np.save(loc.red_valid_context_path, context)
-    np.save(loc.red_valid_context_len_path, context_len)
-    np.save(loc.red_valid_target_path, target)
-    np.save(loc.red_valid_options_path, options)
-    np.save(loc.red_valid_options_len_path, options_len)
+    np.save(loc.stem_valid_context_path, context)
+    np.save(loc.stem_valid_context_len_path, context_len)
+    np.save(loc.stem_valid_target_path, target)
+    np.save(loc.stem_valid_options_path, options)
+    np.save(loc.stem_valid_options_len_path, options_len)
     print("Done.")

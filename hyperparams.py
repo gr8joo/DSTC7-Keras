@@ -2,21 +2,32 @@ class hyper_parameters:
     def __init__(self):
 
         # General parameters
-        self.vocab_pool_size = 321618
-        self.embedding_dim = 300
+        self.vocab_size = 321618
         self.num_utterance_options = 100
         self.max_seq_len = 160
         # self.max_context_len = 160
         # self.max_utterance_len = 160
-        
+
+
         #### Model speicific parameters ####
         # Dual encoder
-        self.rnn_dim = 256
+        self.de_rnn_dim = 256
+        self.de_embedding_dim = 300
+
+        # Memory network(n2n)
+        self.memn2n_rnn_dim = 32
+        self.memn2n_embedding_dim = 150
+        self.story_maxlen = 160
+        self.query_maxlen = 160
+        self.memn2n_drop_rate = 0.3
+        self.dense1 = 1
+        self.dense2 = 150
+        self.hops = 3
 
         # CNN_1d
         self.kernel_size = [1,2,3,4,5,6]
         self.num_filters = 10
-        self.drop_rate = 0.5
+        self.cnn_drop_rate = 0.5
 
 
         # Optimizer parameters
@@ -24,6 +35,7 @@ class hyper_parameters:
         self.clip_norm = 10.0
         self.batch_size = 40
         # self.eval_batch_size = 10
+        self.num_epochs = 100
 
         # Locations of vocab sets
         self.glove_path = 'data/glove.42B.300d.txt'

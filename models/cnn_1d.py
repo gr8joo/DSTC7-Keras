@@ -29,7 +29,7 @@ def cnn_1d_model(hparams, context, utterances):
     print("embeddings_W: ", embeddings_W.shape)
     
     # Define embedding layer shared by context and 100 utterances
-    embedding_layer = Embedding(input_dim=hparams.vocab_pool_size,
+    embedding_layer = Embedding(input_dim=hparams.vocab_size,
                             output_dim=hparams.embedding_dim,
                             weights=[embeddings_W],
                             input_length=hparams.max_seq_len,
@@ -90,15 +90,16 @@ def cnn_1d_model(hparams, context, utterances):
     print("context_encoded: ", context_encoded.shape)
     print("context_encoded: ", context_encoded._keras_history)
 
-    context_encoded = Dropout(hparams.drop_rate)(context_encoded)
+    context_encoded = Dropout(hparams.cnn_drop_rate)(context_encoded)
 
 
     # Output shape: BATCH_SIZE(?) x NUM_UTTERANCES(100) x (NUM_KERNEL_SIZES x NUM_FILTERS)
     #            -> BATCH_SIZE(?) x (NUM_KERNEL_SIZES x NUM_FILTERS) x NUM_UTTERANCES(100)
     all_utterances_encoded = Concatenate(axis=2)(utterances_max_maps)
     all_utterances_encoded = Flatten()(all_utterances_encoded)
-    all_utterances_encoded = Dropout(hparams.drop_rate)(all_utterances_encoded)
-    all_utterances_encoded = Reshape((hparams.num_utterance_options, len(hparams.kernel_size) * hparams.num_filters))(all_utterances_encoded)
+    all_utterances_encoded = Dropout(hparams.cnn_drop_rate)(all_utterances_encoded)
+    all_utterances_encoded = Reshape((hparams.num_utterance_options,
+                                        len(hparams.kernel_size) * hparams.num_filters))(all_utterances_encoded)
     print("all_utterances_encoded: ", all_utterances_encoded.shape)
     print("all_utterances_encoded: ", all_utterances_encoded._keras_history)
     all_utterances_encoded = Permute((2,1))(all_utterances_encoded)

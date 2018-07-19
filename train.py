@@ -5,12 +5,14 @@ import keras
 
 from keras import backend as K
 from keras import metrics
+from keras.callbacks import Callback
 import models.helpers as helpers
 
 from hyperparams import create_hyper_parameters
 
 from models.dual_encoder import dual_encoder_model
 from models.cnn_1d import cnn_1d_model
+from models.memn2n import memn2n_model
 
 # Debugging purpose
 # from models.dual_encoder_no_embedding import dual_encoder_no_embedding_model
@@ -19,6 +21,32 @@ from keras.layers import Input
 from keras.models import Model
 from keras.callbacks import ModelCheckpoint
 
+class NBatchLogger(Callback):
+    """
+    A Logger that log average performance per `display` steps.
+    """
+    def __init__(self, display):
+        self.step = 0
+        self.display = display
+        self.metric_cache = {}
+
+    def on_batch_end(self, batch, logs={}):
+        self.step += 1
+        for k in self.params['metrics']:
+            if k in logs:
+                self.metric_cache[k] = self.metric_cache.get(k, 0) + logs[k]
+        if self.step % self.display == 0:
+            metrics_log = ''
+            for (k, v) in self.metric_cache.items():
+                val = v / self.display
+                if abs(val) > 1e-3:
+                    metrics_log += ' - %s: %.4f' % (k, val)
+                else:
+                    metrics_log += ' - %s: %.4e' % (k, val)
+            print('step: {}/{} ... {}'.format(self.step,
+                                          self.params['steps'],
+                                          metrics_log))
+            self.metric_cache.clear()
 
 def top2acc(y_true, y_pred, k=2):
     return K.mean(K.in_top_k(y_pred, K.cast(K.max(y_true, axis=-1), 'int32'), k), axis=-1)
@@ -64,13 +92,14 @@ def main():
     utterances = Input(shape=(hparams.num_utterance_options, hparams.max_seq_len))
     inputs = [context, utterances]
     
-    # probs = dual_encoder_model(hparams, context, utterances)
-    probs = cnn_1d_model(hparams, context, utterances)
+    probs = dual_encoder_model(hparams, context, utterances)
+    # probs = cnn_1d_model(hparams, context, utterances)
+    # probs = memn2n_model(hparams, context, utterances)
 
     model = Model(inputs=inputs, outputs=probs)
     print("Model loaded")
 
-
+    out_batch = NBatchLogger(10)
     checkpointer = ModelCheckpoint(filepath='./dual_encoder_checkpoint.h5', verbose=1, save_best_only=True)
     optim = keras.optimizers.Adam(lr=hparams.learning_rate, clipnorm=hparams.clip_norm)
     model.compile(loss={'probs': 'sparse_categorical_crossentropy'},
@@ -78,8 +107,8 @@ def main():
                     loss_weights={'probs': 1.0}, metrics=['accuracy', top2acc, top5acc, top10acc, top50acc])
 
     model.summary()
-    model.fit(train_X, train_Y, batch_size=hparams.batch_size,
-    	        epochs=300,validation_data=(valid_X, valid_Y), verbose=1)#, callbacks=[checkpointer])
+    model.fit(train_X, train_Y, batch_size=hparams.batch_size, #steps_per_epoch=10, validation_steps=125,#
+    	        epochs=hparams.num_epochs,validation_data=(valid_X, valid_Y), verbose=1)#, callbacks=[history])#, callbacks = [out_batch])#, callbacks=[checkpointer])
 
     # model.save_weights('./dual_encoder_weights.h5', overwrite=True)
 

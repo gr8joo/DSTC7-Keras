@@ -17,7 +17,7 @@ def get_embeddings(hparams):
     W = helpers.build_initial_embedding_matrix(vocab_dict,
                                                 glove_dict,
                                                 glove_vectors,
-                                                hparams.embedding_dim)
+                                                hparams.de_embedding_dim)
     print("Embedding matrix built.")
     return W
 
@@ -32,8 +32,8 @@ def dual_encoder_model(hparams, context, utterances):
     print("embeddings_W: ", embeddings_W.shape)
     
     # Define embedding layer shared by context and 100 utterances
-    embedding_layer = Embedding(input_dim=hparams.vocab_pool_size,
-                            output_dim=hparams.embedding_dim,
+    embedding_layer = Embedding(input_dim=hparams.vocab_size,
+                            output_dim=hparams.de_embedding_dim,
                             weights=[embeddings_W],
                             input_length=hparams.max_seq_len,
                             mask_zero=True,
@@ -51,16 +51,13 @@ def dual_encoder_model(hparams, context, utterances):
     print("Utterances_embedded (history): ", utterances_embedded._keras_history)
 
     # Define LSTM Context encoder
-    LSTM_context = LSTM(hparams.rnn_dim,
-                        input_shape=(hparams.max_seq_len, hparams.embedding_dim),
+    LSTM_context = LSTM(hparams.de_rnn_dim,
+                        input_shape=(hparams.max_seq_len, hparams.de_embedding_dim),
                         unit_forget_bias=True,
                         return_state=False,
                         return_sequences=False)
 
     # Encode context (Output shape: BATCH_SIZE(?) x RNN_DIM(256))
-    # context_encoded_outputs,\
-    # context_encoded_h, context_encoded_c = LSTM_context(context_embedded)
-    
     context_encoded_h = LSTM_context(context_embedded)
     context_encoded_h = NonMasking()(context_encoded_h)
     print("context_encoded_h: ", context_encoded_h.shape)
@@ -68,26 +65,16 @@ def dual_encoder_model(hparams, context, utterances):
     
         
     # Define LSTM Utterances encoder
-    LSTM_utterances = LSTM(hparams.rnn_dim,
-                        input_shape=(hparams.max_seq_len, hparams.embedding_dim),
+    LSTM_utterances = LSTM(hparams.de_rnn_dim,
+                        input_shape=(hparams.max_seq_len, hparams.de_embedding_dim),
                         unit_forget_bias=True,
                         return_state=False,
                         return_sequences=False)
     
-    # Encode utterances (100 times)
-    all_utterances_encoded_h = []
-    ### transpose_and_expand_dims_layer = Lambda(lambda x: K.expand_dims(K.transpose(x), axis=0))
-    ### transpose_layer = Lambda(lambda x: K.transpose(x))
-    ### expand_layer = Lambda(lambda x: K.expand_dims(x, axis=1))
-    # [all_utterances_output,\
-    # all_utterances_encoded_h,
+    # Encode utterances (100 times, Output shape: BATCH_SIZE(?) x NUM_OPTIONS(100) x RNN_DIM(256) )
     all_utterances_encoded_h = TimeDistributed(LSTM_utterances,
-                                                input_shape=(hparams.num_utterance_options, hparams.max_seq_len, hparams.embedding_dim))(utterances_embedded)
+                                                input_shape=(hparams.num_utterance_options, hparams.max_seq_len, hparams.de_embedding_dim))(utterances_embedded)
 
-    # outputs = []
-    # for out in LSTM_utterances.output:
-    #     outputs.append(TimeDistributed(Model(LSTM_utterances.input, out))(utterances_embedded))
-    # all_utterances_output, all_utterances_encoded_h, all_utterances_encoded_c = outputs
     print("all_utterances_encoded_h: ", all_utterances_encoded_h.shape)
     all_utterances_encoded_h = NonMasking()(all_utterances_encoded_h)
     all_utterances_encoded_h = Permute((2,1))(all_utterances_encoded_h)
@@ -97,15 +84,15 @@ def dual_encoder_model(hparams, context, utterances):
 
     # Generate (expected) response from context: C_transpose * M
     # (Output shape: BATCH_SIZE(?) x RNN_DIM(256))
-    matrix_multiplication_layer = Dense(hparams.rnn_dim,
-                                        use_bias=False,
+    matrix_multiplication_layer = Dense(hparams.de_rnn_dim,
+                                        use_bias=True,
                                         kernel_initializer=keras.initializers.TruncatedNormal(mean=0.0, stddev=1.0, seed=None))
     generated_response = matrix_multiplication_layer(context_encoded_h)
     print("genearted_response: ", generated_response.shape)
     print("history555555: ", generated_response._keras_history)
 
     # (Output shape: BATCH_SIZE(?) x RNN_DIM(256) -> BATCH_SIZE(?) x EXTRA_DIM(1) x RNN_DIM(256))
-    generated_response = Reshape((1,hparams.rnn_dim))(generated_response)
+    generated_response = Reshape((1,hparams.de_rnn_dim))(generated_response)
     print("genearted_response_expand_dims: ", generated_response.shape)
     print("genearted_response_expand_dims: ", generated_response._keras_history)
     
@@ -117,8 +104,6 @@ def dual_encoder_model(hparams, context, utterances):
     print("logits: ", logits.shape)
     print("logtis: ", logits._keras_history)
 
-    ### squeeze_layer = Lambda(lambda x: K.squeeze(x, 1))
-    ### logits = squeeze_layer(logits)
     # Squeezing logits (Output shape: BATCH_SIZE(?) x NUM_OPTIONS(100))
     logits = Reshape((hparams.num_utterance_options,), input_shape=(1, hparams.num_utterance_options))(logits)
     print("logits_squeeze: ", logits.shape)
