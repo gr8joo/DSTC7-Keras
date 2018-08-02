@@ -63,6 +63,7 @@ def memn2n_model(hparams, context, utterances):
     LSTM_answer = LSTM(hparams.memn2n_rnn_dim)
     Dense1 = Dense(hparams.dense1)
     Dense2 = Dense(hparams.memn2n_embedding_dim)
+    Dense3 = Dense(hparams.memn2n_embedding_dim)
     Dropout_ = Dropout(hparams.memn2n_drop_rate)
     Softmax = Activation('softmax')
     reshape_dim = hparams.story_maxlen * hparams.memn2n_embedding_dim
@@ -98,15 +99,25 @@ def memn2n_model(hparams, context, utterances):
         input_encoded_c = Reshape(( hparams.num_utterance_options, hparams.story_maxlen, hparams.query_maxlen, ))(input_encoded_c) # (batch, num_utterance_options, story_maxlen, query_maxlen)
 
         response = multiply([match, input_encoded_c])                               # (batch, num_utterance_options, story_maxlen, query_maxlen)
-        print("response.shape: ",response.shape)
+        #print("response.shape: ",response.shape)
         response = Reshape((hparams.num_utterance_options, hparams.query_maxlen, hparams.story_maxlen,))(response) # (batch, num_utterance_options, query_maxlen, story_maxlen)
-        print("response.shape: ",response.shape)
+        #print("response.shape: ",response.shape)
+        
+        #######################################
+        #instead of concat, let's try add here#
+        response = TimeDistributed( Dense3 )(response)
+        answer = add([response, question_encoded])                                   # (batch, num_utterance_options, query_maxlen, embedding_dim)
+
+
+
+
         #answer = concatenate([response, question_encoded], axis=3)                  # (batch, num_utterance_options, query_maxlen, story_maxlen + embedding_dim )
-        answer = concatenate([question_encoded, response], axis=3)
+        #answer = concatenate([question_encoded, response], axis=3)
 
         if hop != hparams.hops-1:
- 
-            answer = TimeDistributed( Dense2, input_shape=(hparams.query_maxlen , hparams.story_maxlen + hparams.memn2n_embedding_dim) )(answer) #(batch, num_utterance_options, query_maxlen, embedding_dim) 
+
+            continue
+            #answer = TimeDistributed( Dense2, input_shape=(hparams.query_maxlen , hparams.story_maxlen + hparams.memn2n_embedding_dim) )(answer) #(batch, num_utterance_options, query_maxlen, embedding_dim) 
 
         if hop == hparams.hops-1:
             answer = Masking()(answer)
