@@ -2,11 +2,11 @@ class hyper_parameters:
     def __init__(self):
 
         # General parameters
-        self.vocab_size = 321618
+        self.vocab_size = 4899# 321618
         self.num_utterance_options = 100
-        self.max_seq_len = 160
-        # self.max_context_len = 160
-        # self.max_utterance_len = 160
+        # self.max_seq_len = 160
+        self.max_context_len = 400
+        self.max_utterance_len = 100
 
 
         #### Model speicific parameters ####
@@ -25,34 +25,35 @@ class hyper_parameters:
         self.hops = 3
 
         # CNN_1d
-        self.kernel_size = [1,2,3,4,5,6]
+        self.cnn_embedding_dim = 300
+        self.kernel_size = [2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21]
         self.num_filters = 10
-        self.cnn_drop_rate = 0.5
+        # self.cnn_drop_rate = 0.5
 
 
         # Optimizer parameters
         self.learning_rate = 0.001
         self.clip_norm = 10.0
-        self.batch_size = 40
+        self.batch_size = 25
         # self.eval_batch_size = 10
         self.num_epochs = 100
 
         # Locations of vocab sets
         self.glove_path = 'data/glove.42B.300d.txt'
-        self.vocab_path = 'data/ubuntu_subtask_1.txt'
+        self.vocab_path = 'data/advising/advising.scenario-1.txt'# ubuntu_subtask_1.txt'
         ### self.glove_vectors_path = 'data/glove_vectors.npy'
         ### self.glove_dict_path = 'data/glove_dict.npy'
 
         # Locations of digitized sentences of training/valdiation data
         self.train_context_path = 'train_data/train_context.npy'# 'valid_data/valid_context.npy'#
         self.train_context_len_path = 'train_data/train_context_len.npy'# 'valid_data/valid_context_len.npy'#
-        self.train_target_path = 'train_data/train_target.npy'# 'valid_data/valid_target.npy'#
+        self.train_target_path = 'train_data/train_advising/train_target.npy'# 'valid_data/valid_target.npy'#
         self.train_options_path = 'train_data/train_options.npy'# 'valid_data/valid_options.npy'#
         self.train_options_len_path = 'train_data/train_options_len.npy'# 'valid_data/valid_options_len.npy'#
 
         self.valid_context_path = 'valid_data/valid_context.npy'
         self.valid_context_len_path = 'valid_data/valid_context_len.npy'
-        self.valid_target_path = 'valid_data/valid_target.npy'
+        self.valid_target_path = 'valid_data/valid_advising/valid_target.npy'
         self.valid_options_path = 'valid_data/valid_options.npy'
         self.valid_options_len_path = 'valid_data/valid_options_len.npy'
 

@@ -6,34 +6,18 @@ import keras
 from keras import backend as K
 from keras.layers import Dense, TimeDistributed, Activation, LSTM, Embedding, Reshape, Lambda, Permute, NonMasking
 
-def get_embeddings(hparams):
-
-    vocab_array, vocab_dict = helpers.load_vocab(hparams.vocab_path)
-    print("vocab_array / dict loaded.")
-    glove_vectors, glove_dict = helpers.load_glove_vectors(hparams.glove_path,
-                                                            vocab=set(vocab_array))
-    print("glove_vectors / dict loaded.")
-    W = helpers.build_initial_embedding_matrix(vocab_dict,
-                                                glove_dict,
-                                                glove_vectors,
-                                                hparams.de_embedding_dim)
-    print("Embedding matrix built.")
-    return W
-
-
 
 def dual_encoder_model(hparams, context, utterances):
 
     print("context_shape: ", context.shape)
     print("utterances_shape: ", utterances.shape)
 
-    # Initialize embeddings randomly or with pre-trained vectors
-    # embeddings_W = get_embeddings(hparams)
+    # Use embedding matrix pretrained by Gensim
     embeddings_W = np.load('data/embedding_W.npy')
     print("embeddings_W: ", embeddings_W.shape)
     
     # Define embedding layer shared by context and 100 utterances
-    embedding_context_layer = Embedding(input_dim=4899,
+    embedding_context_layer = Embedding(input_dim=hparams.vocab_size,
                             output_dim=hparams.de_embedding_dim,
                             weights=[embeddings_W],
                             input_length=hparams.max_context_len,
@@ -47,14 +31,14 @@ def dual_encoder_model(hparams, context, utterances):
     print("context_embedded (history): ", context_embedded._keras_history)
 
     # Utterances Embedding (Output shape: NUM_OPTIONS(100) x BATCH_SIZE(?) x LEN_SEQ(160) x EMBEDDING_DIM(300))
-    embedding_utterance_layer = Embedding(input_dim=4899,
+    embedding_utterances_layer = Embedding(input_dim=hparams.vocab_size,
                             output_dim=hparams.de_embedding_dim,
                             weights=[embeddings_W],
                             input_length=hparams.max_utterance_len,
                             mask_zero=True,
                             trainable=False)
 
-    utterances_embedded = TimeDistributed(embedding_utterance_layer,
+    utterances_embedded = TimeDistributed(embedding_utterances_layer,
                                             input_shape=(hparams.num_utterance_options, hparams.max_utterance_len))(utterances)
     print("Utterances_embedded: ", utterances_embedded.shape)
     print("Utterances_embedded (history): ", utterances_embedded._keras_history)

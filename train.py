@@ -2,6 +2,7 @@ import os
 import time
 import numpy as np
 import keras
+import random
 
 from keras import backend as K
 from keras import metrics
@@ -10,8 +11,10 @@ import models.helpers as helpers
 
 from hyperparams import create_hyper_parameters
 
-from models.dual_encoder import dual_encoder_model
-from models.cnn_1d import cnn_1d_model
+# from models.dual_encoder import dual_encoder_model
+from models.dual_encoder_pretrain import dual_encoder_model
+# from models.cnn_1d import cnn_1d_model
+from models.cnn_1d_pretrain import cnn_1d_model
 from models.memn2n import memn2n_model
 
 # Debugging purpose
@@ -20,6 +23,14 @@ from models.memn2n import memn2n_model
 from keras.layers import Input
 from keras.models import Model
 from keras.callbacks import ModelCheckpoint
+
+def custom_loss(probs):
+    def loss(y_true, y_pred):
+        mse_loss = -K.sum(K.square(probs))
+        # K.update_add(mse_loss, 2*K.square(probs[y_true]))
+        mse_loss = mse_loss + 2*K.square(probs[y_true])
+        return mse_loss
+    return loss
 
 class NBatchLogger(Callback):
     """
@@ -88,27 +99,35 @@ def main():
     valid_Y = valid_target
 
 
-    context = Input(shape=(hparams.max_seq_len,))
-    utterances = Input(shape=(hparams.num_utterance_options, hparams.max_seq_len))
+    context = Input(shape=(hparams.max_context_len,))
+    utterances = Input(shape=(hparams.num_utterance_options, hparams.max_utterance_len))
     inputs = [context, utterances]
     
-    probs = dual_encoder_model(hparams, context, utterances)
-    # probs = cnn_1d_model(hparams, context, utterances)
+    # probs = dual_encoder_model(hparams, context, utterances)
+    probs = cnn_1d_model(hparams, context, utterances)
     # probs = memn2n_model(hparams, context, utterances)
 
     model = Model(inputs=inputs, outputs=probs)
     print("Model loaded")
 
-    out_batch = NBatchLogger(10)
+    # out_batch = NBatchLogger(10)
     checkpointer = ModelCheckpoint(filepath='./dual_encoder_checkpoint.h5', verbose=1, save_best_only=True)
     optim = keras.optimizers.Adam(lr=hparams.learning_rate, clipnorm=hparams.clip_norm)
-    model.compile(loss={'probs': 'sparse_categorical_crossentropy'},
+    model.compile(loss={'probs': 'sparse_categorical_crossentropy'},#custom_loss(probs=probs),#{'probs': custom_loss},#
                     optimizer=optim,
                     loss_weights={'probs': 1.0}, metrics=['accuracy', top2acc, top5acc, top10acc, top50acc])
 
     model.summary()
-    model.fit(train_X, train_Y, batch_size=hparams.batch_size, #steps_per_epoch=10, validation_steps=125,#
-    	        epochs=hparams.num_epochs,validation_data=(valid_X, valid_Y), verbose=1)#, callbacks=[history])#, callbacks = [out_batch])#, callbacks=[checkpointer])
+    model.fit(train_X, train_Y, batch_size=hparams.batch_size,
+    	        epochs=hparams.num_epochs,validation_data=(valid_X, valid_Y), verbose=1)#, callbacks=[checkpointer])
+    '''
+    for i in range(100):
+        indices = random.sample(range(100000), 10000)
+        train_X = [np.array(np.take(train_context, indices, axis=0)), np.array(np.take(train_options, indices, axis=0))]
+        train_Y = np.take(train_target, indices, axis=0)
+        model.fit(train_X, train_Y, batch_size=hparams.batch_size,
+            epochs=1,validation_data=(valid_X, valid_Y), verbose=1)#, callbacks=[checkpointer])
+    '''
 
     # model.save_weights('./dual_encoder_weights.h5', overwrite=True)
 
