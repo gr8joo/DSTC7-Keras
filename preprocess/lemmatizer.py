@@ -3,7 +3,6 @@ import sys
 import ijson
 import functools
 import numpy as np
-#from locations import create_data_locations
 import nltk
 from nltk.stem.lancaster import LancasterStemmer
 from nltk.stem import WordNetLemmatizer
@@ -52,56 +51,14 @@ def stem_sentence(sentence):
     
     """
 
-#    ps = nltk.stem.PorterStemmer()
-#    ls = LancasterStemmer()
-#    lemmatizer = WordNetLemmatizer()
-
-    #print(sentence) # For the purpose of debugging, print original sentence
     sentence = sentence.strip().replace('\n',' ').replace('..',' ')
     new_sentence = tag_and_lem(sentence.lower()).replace('eec ','eecs ').replace(' c ',' cs ')
     
-    #print(new_sentence)
     
     return new_sentence
     
     
     
-    
-    
-    
-""" 
-    stemmed_sentence = []
-    sentence = sentence.replace('\n',' ')
-    sentence = sentence.replace('.',' .')
-    sentence = sentence.replace(',',' ,')
-    sentence = sentence.replace('!',' !')
-    sentence = sentence.replace('?',' ?')
-#    print(sentence)
-    
-    for word in sentence.strip().split(" "):
-#        print(word)
-        #stemmed_sentence.append(ps.stem(word))
-        #stemmed_sentence.append(ls.stem(word))
-        word = word.lower()
-        
-        #if word in ['has','was','includes']:
-        #    new_word = lemmatizer.lemmatize(word,pos='v')
-        #else if word in ['eecs','cs']:
-        #    new_word = word
-        #else:
-        #    new_word = lemmatizer.lemmatize(word)
-        new_word = tag_and_lem(word)
-        if new_word == 'eec':
-            new_word = 'eecs'
-#        print(new_word)
-
-        stemmed_sentence.append(new_word)
-    new_sentence = " ".join(stemmed_sentence)
-    
-    print(new_sentence) # For the purpose of debugging, print the converted sentence
-    
-    return new_sentence
-"""   
 def process_dialog(dialog):
     """
     Add EOU and EOT tags between utterances and create a single context string.
@@ -167,28 +124,11 @@ def create_utterance_iter(input_iter):
         all_utterances = []
         context = row[0]
         next_utterances = row[1:101]
-#
-        ###################### stemmer ######################
-#        print(context)
-#        print(next_utterances)
-#        new_context = stem_sentence(context)
-#        new_next_utterances = []
-#        for utterance in next_utterances:
-#            new_utterance = stem_sentence(utterance)
-#            new_next_utterances.append(new_utterance)
-#
-#        context = new_context
-#        next_utterances = new_next_utterances
-        #####################################################
-#
         all_utterances.append(context)
         all_utterances.extend(next_utterances)
         
         for utterance in all_utterances:
-            #print(utterance)
             new_utterance = stem_sentence(utterance)
-            #new_utterance =tag_and_lem(utterance)
-            #print(new_utterance)
             yield new_utterance
 
 def create_vocab(input_iter, min_frequency):
@@ -215,19 +155,15 @@ def create_example_nparray_format(row, vocab):
 
     context = row[0]
     next_utterances = row[1:101]
-#
-#
     ######################### stemmer ########################
     new_context = stem_sentence(context)
     new_next_utterances = []
     for utterance in next_utterances:
         new_utterance = stem_sentence(utterance)
         new_next_utterances.append(new_utterance)#
-#
     context = new_context
     next_utterances = new_next_utterances
     ##########################################################
-#
     target = row[-1]
 
     context_transformed = transform_sentence(context, vocab)
@@ -297,26 +233,21 @@ input1 = open('wiki.en.txt','r')
 f = open("wiki_lemmatized_final_text.txt",'w')
 
 i=0
-#for sentence in input_iter1:
+
 """
 print("Start writing from advising_train_and_dev_merged_text.txt...")
 
 for sentence in input2:
-    #sentence.replace('\n',' ')
-    #fout1.write(sentence+'\n')
     new_sentence = stem_sentence(sentence)
     f.write(new_sentence+'\n')
     i = i+1
     if i % 100000 == 0:
         print(i)
-#for sentence in input_iter2:
 """
 
 print("Start writing from wiki.en.txt...")
 
 for sentence in input1:
-    #sentence.replace('\n',' ')
-    #fout2.write(sentence+'\n')
     new_sentence = stem_sentence(sentence)
     f.write(new_sentence+'\n')
     i = i+1
