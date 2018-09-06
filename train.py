@@ -60,32 +60,6 @@ def custom_loss(probs):
         return mse_loss
     return loss
 
-class NBatchLogger(Callback):
-    """
-    A Logger that log average performance per `display` steps.
-    """
-    def __init__(self, display):
-        self.step = 0
-        self.display = display
-        self.metric_cache = {}
-
-    def on_batch_end(self, batch, logs={}):
-        self.step += 1
-        for k in self.params['metrics']:
-            if k in logs:
-                self.metric_cache[k] = self.metric_cache.get(k, 0) + logs[k]
-        if self.step % self.display == 0:
-            metrics_log = ''
-            for (k, v) in self.metric_cache.items():
-                val = v / self.display
-                if abs(val) > 1e-3:
-                    metrics_log += ' - %s: %.4f' % (k, val)
-                else:
-                    metrics_log += ' - %s: %.4e' % (k, val)
-            print('step: {}/{} ... {}'.format(self.step,
-                                          self.params['steps'],
-                                          metrics_log))
-            self.metric_cache.clear()
 
 def top2acc(y_true, y_pred, k=2):
     return K.mean(K.in_top_k(y_pred, K.cast(K.max(y_true, axis=-1), 'int32'), k), axis=-1)
@@ -101,8 +75,48 @@ def top50acc(y_true, y_pred, k=50):
 
 
 def main():
+
+    ############################# Load Configurations #############################    
     hparams = create_hyper_parameters()
 
+
+    ############### Load a model and shaping model input&output ###############
+    context = Input(shape=(hparams.max_context_len,))
+    context_speaker = Input(shape=(hparams.max_context_len, 2))
+    utterances = Input(shape=(hparams.num_utterance_options, hparams.max_utterance_len))
+    # profile = Input(shape=(hparams.max_profile_len,))
+
+
+    inputs = [context, context_speaker, utterances]
+    # inputs = [context, context_speaker, utterances, profile]
+    
+
+    # probs = dual_encoder_model(hparams, context, context_speaker, utterances)
+    # probs = dual_encoder_model(hparams, context, context_speaker, utterances, profile)
+    # probs = cnn_1d_model(hparams, context, context_speaker, utterances)
+    probs = memLstm_model(hparams, context, context_speaker, utterances)
+    # probs = memLstm_model(hparams, context, context_speaker, utterances, profile)
+
+
+    model = Model(inputs=inputs, outputs=probs)
+    print("Model loaded")
+
+
+    # tensorboard = TensorBoard(log_dir="logs/{}".format(time()))
+    tensorboard =\
+    TensorBoard(log_dir='./Graph', histogram_freq=0, write_graph=True, write_images=True)
+    # checkpointer =\
+    # ModelCheckpoint(filepath='./dual_encoder_checkpoint.h5', verbose=1, save_best_only=True)
+    # optim = keras.optimizers.SGD(lr=hparams.learning_rate, momentum=0.0, decay=0.0, nesterov=False)
+    optim = keras.optimizers.Adam(lr=hparams.learning_rate, clipnorm=hparams.clip_norm)#, decay=0.001)
+    model.compile(loss={'probs': 'sparse_categorical_crossentropy'},#custom_loss(probs=probs),#{'probs': custom_loss},
+                    optimizer=optim,
+                    # loss_weights={'probs': 1.0},
+                    metrics=['accuracy', top2acc, top5acc, top10acc, top50acc])
+    model.summary()
+
+
+    ############################# Load Datas #############################    
     print("Loading training data")
     train_context = np.load(hparams.train_context_path)
     train_context_speaker =np.load(hparams.train_context_speaker_path)
@@ -124,38 +138,8 @@ def main():
     # valid_profile = np.load(hparams.valid_profile_path)
 
 
-    context = Input(shape=(hparams.max_context_len,))
-    context_speaker = Input(shape=(hparams.max_context_len, 2))
-    utterances = Input(shape=(hparams.num_utterance_options, hparams.max_utterance_len))
-    # profile = Input(shape=(hparams.max_profile_len,))
 
-
-    inputs = [context, context_speaker, utterances]
-    # inputs = [context, context_speaker, utterances, profile]
-    
-    # probs = dual_encoder_model(hparams, context, context_speaker, utterances)
-    # probs = dual_encoder_model(hparams, context, context_speaker, utterances, profile)
-    # probs = cnn_1d_model(hparams, context, context_speaker, utterances)
-    # probs = tri_encoder_model(hparams, context, utterances)
-    probs = memLstm_model(hparams, context, context_speaker, utterances)
-    # probs = memLstm_model(hparams, context, context_speaker, utterances, profile)
-
-    model = Model(inputs=inputs, outputs=probs)
-    print("Model loaded")
-
-    # out_batch = NBatchLogger(10)
-    # tensorboard = TensorBoard(log_dir="logs/{}".format(time()))
-    tensorboard = TensorBoard(log_dir='./Graph', histogram_freq=0, write_graph=True, write_images=True)
-    checkpointer = ModelCheckpoint(filepath='./dual_encoder_checkpoint.h5', verbose=1, save_best_only=True)
-    # optim = keras.optimizers.SGD(lr=hparams.learning_rate, momentum=0.0, decay=0.0, nesterov=False)
-    optim = keras.optimizers.Adam(lr=hparams.learning_rate, clipnorm=hparams.clip_norm)#, decay=0.001)
-    model.compile(loss={'probs': 'sparse_categorical_crossentropy'},#custom_loss(probs=probs),#{'probs': custom_loss},#
-                    optimizer=optim,
-                    # loss_weights={'probs': 1.0},
-                    metrics=['accuracy', top2acc, top5acc, top10acc, top50acc])
-
-    model.summary()
-
+    ############################# TRAIN #############################
     # train_X = [train_context, train_context_speaker, train_options]
     # train_X = [train_context, train_context_speaker, train_options, train_profile]
     # train_Y = train_target
@@ -164,9 +148,6 @@ def main():
     # valid_X = [valid_context, valid_context_speaker, valid_options, valid_profile]
     valid_Y = valid_target
 
-
-
-    ############################# TRAIN #############################
 
     ### model.fit(train_X, train_Y, batch_size=hparams.batch_size,
     ### 	        epochs=hparams.num_epochs,validation_data=(valid_X, valid_Y), verbose=1)#, callbacks=[tensorboard])#, callbacks=[checkpointer])
