@@ -4,16 +4,16 @@ import random
 from locations import create_data_locations
 
 loc = create_data_locations()
-train_context = np.load(loc.train_context_no_eou_path)
+train_context = np.load(loc.train_context_path)
 # train_context_len = np.load(loc.train_context_len_path)
 # train_target = np.load(loc.train_target_path)
-train_options = np.load(loc.train_options_no_eou_path)
+train_options = np.load(loc.train_options_path)
 # train_options_len = np.load(loc.train_options_len_path)
 
-valid_context = np.load(loc.valid_context_no_eou_path)
+valid_context = np.load(loc.valid_context_path)
 # valid_context_len = np.load(loc.valid_context_len_path)
 # valid_target = np.load(loc.valid_target_path)
-valid_options = np.load(loc.valid_options_no_eou_path)
+valid_options = np.load(loc.valid_options_path)
 # valid_options_len = np.load(loc.valid_options_len_path)
 
 
@@ -42,7 +42,7 @@ print(valid_context[0][3])
 # b = set(valid_target)
 # print("Valid_target_set: ", b)
 print("===================================Recovery======================================")
-with open('/home/hjhwang/Codes/dstc7-keras/data/advising_lemmatized_vocab.txt','r') as f:
+with open('/home/hjhwang/Codes/dstc7-keras/data/advising_lemma_vocab.txt','r') as f:
     A = f.read()
     advising_vocab = A.split('\n')
 
@@ -58,13 +58,13 @@ with open('/home/hjhwang/Codes/dstc7-keras/data/advising_lemmatized_vocab.txt','
         for i in range(len(recovery_context)):
             # print(recovery_context[i])
             str += recovery_context[i] + ' '
-            if recovery_context[i] == '__eot__':
+            if recovery_context[i] == '__eou__':
                 print(str)
                 str = ''
         # do = [ int(valid_options[0][idx][i]) for i in range(100)]
         print("----------------------------Options----------------------------")
         for i in range(100):
-            recovery = [ advising_vocab[ train_options[idx][i][j]-1 ] for j in range(100) if train_options[idx][i][j]>0]
+            recovery = [ advising_vocab[ train_options[idx][i][j]-1 ] for j in range(90) if train_options[idx][i][j]>0]
             str = ''
             for j in range(len(recovery)):
                 # print(recovery_context[i])
