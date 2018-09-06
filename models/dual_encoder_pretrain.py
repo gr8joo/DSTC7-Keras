@@ -4,7 +4,8 @@ import numpy as np
 import keras
 
 from keras import backend as K
-from keras.layers import Dense, TimeDistributed, Activation, LSTM, Embedding, Reshape, Lambda, Permute, NonMasking
+from keras.layers import Dense, TimeDistributed, Activation, LSTM, Embedding
+from keras.layers import Reshape, Lambda, Permute, NonMasking, Dot
 
 
 def dual_encoder_model(hparams, context, utterances):
@@ -93,7 +94,8 @@ def dual_encoder_model(hparams, context, utterances):
     # Dot product between generated response and each of 100 utterances(actual response r): C_transpose * M * r
     # (Output shape: BATCH_SIZE(?) x EXTRA_DIM(1) x NUM_OPTIONS(100))
     batch_matrix_multiplication_layer = Lambda(lambda x: K.batch_dot(x[0], x[1]))
-    logits = batch_matrix_multiplication_layer([generated_response, all_utterances_encoded_h])
+    # logits = batch_matrix_multiplication_layer([generated_response, all_utterances_encoded_h])
+    logits = Dot(axes=[2,1])([generated_response, all_utterances_encoded_h])
     print("logits: ", logits.shape)
     print("logtis: ", logits._keras_history)
 

@@ -7,7 +7,7 @@ from keras import backend as K
 from keras.layers import Conv1D, Conv2D, MaxPooling1D, MaxPooling2D, TimeDistributed, Dense, Flatten, Activation, Embedding, Reshape, Concatenate, Lambda, Permute, Dropout
 
 
-def cnn_1d_model(hparams, context, utterances):
+def cnn_1d_model(hparams, context, context_speaker, utterances):
 
     # Use embedding matrix pretrained by Gensim
     embeddings_W = np.load('data/embedding_W.npy')
@@ -23,6 +23,7 @@ def cnn_1d_model(hparams, context, utterances):
 
     # Context Embedding (Output shape: BATCH_SIZE(?) x LEN_SEQ(160) x EMBEDDING_DIM(300))
     context_embedded = embedding_context_layer(context)
+    context_embedded = Concatenate(axis=-1)([context_embedded, context_speaker])
     # context_embedded = Masking()(context_embedded)
     print("context_embedded: ", context_embedded.shape)
     print("context_embedded (history): ", context_embedded._keras_history)
@@ -52,7 +53,8 @@ def cnn_1d_model(hparams, context, utterances):
         CNN_1D = Conv1D(filters=hparams.num_filters,
                             kernel_size=k_s,
                             strides=1,
-                            padding="valid",
+                            # padding="valid",
+                            padding="same",
                             activation="relu",
                             input_shape=(hparams.max_context_len, hparams.cnn_embedding_dim))
         
@@ -60,21 +62,24 @@ def cnn_1d_model(hparams, context, utterances):
         context_feature_map = CNN_1D(context_embedded)
         
         # Output shape: BATCH_SIZE(?) x 1 x NUM_FILTERS (for one kernel_size)
-        context_max_map = MaxPooling1D(pool_size=hparams.max_context_len-k_s+1)(context_feature_map)
+        # context_max_map = MaxPooling1D(pool_size=hparams.max_context_len-k_s+1)(context_feature_map)
+        context_max_map = MaxPooling1D(pool_size=hparams.max_context_len)(context_feature_map)
         context_max_maps.append(Flatten()(context_max_map))
 
 
         CNN_2D = Conv2D(filters=hparams.num_filters,
                             kernel_size=(1,k_s),
                             strides=1,
-                            padding="valid",
+                            # padding="valid",
+                            padding="same",
                             activation='relu',
                             input_shape=(hparams.num_utterance_options,hparams.max_utterance_len,hparams.cnn_embedding_dim))
         # Output shape: BATCH_SIZE(?) x NUM_UTTERANCES(100) x (LEN_SEQ - k_s + 1) x NUM_FILTERS (for one kernel_size)
         utterances_feature_map=CNN_2D(utterances_embedded)
 
         # Output shape: BATCH_SIZE(?) x NUM_UTTERANCES(100) x 1 x NUM_FILTERS (for one kernel_size)
-        utterances_max_map = MaxPooling2D(pool_size=(1,hparams.max_utterance_len - k_s + 1))(utterances_feature_map)
+        #utterances_max_map = MaxPooling2D(pool_size=(1,hparams.max_utterance_len - k_s + 1))(utterances_feature_map)
+        utterances_max_map = MaxPooling2D(pool_size=(1,hparams.max_utterance_len))(utterances_feature_map)
 
         # Output shape: BATCH_SIZE(?) x NUM_UTTERANCES(100) x NUM_FILTERS (for one kernel_size)
         Flatten_u_by_u = Reshape((hparams.num_utterance_options, hparams.num_filters))

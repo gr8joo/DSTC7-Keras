@@ -4,8 +4,9 @@ import sys
 # sys.path.append('../')
 
 import ijson
+import json
 import functools
-
+import pickle
 import tensorflow as tf
 import numpy as np
 
@@ -15,28 +16,39 @@ from locations import create_data_locations
 tf.flags.DEFINE_integer(
     "min_word_frequency", 1, "Minimum frequency of words in the vocabulary")
 
-tf.flags.DEFINE_string("train_in", None, "Path to input data file")
-tf.flags.DEFINE_string("validation_in", None, "Path to validation data file")
+tf.flags.DEFINE_string("train_lemma_in", None, "Path to input data file")
+tf.flags.DEFINE_string("train_json_in", None, "Path to input data file")
 
-tf.flags.DEFINE_string("train_out", None, "Path to output train tfrecords file")
-tf.flags.DEFINE_string("validation_out", None, "Path to output validation tfrecords file")
+tf.flags.DEFINE_string("valid_lemma_in", None, "Path to validation data file")
+tf.flags.DEFINE_string("valid_json_in", None, "Path to validation data file")
 
-tf.flags.DEFINE_string("advising_vocab_path", None, "Path to save vocabulary processor")
-tf.flags.DEFINE_string("entire_vocab_path", None, "Path to save vocabulary txt file")
+# tf.flags.DEFINE_string("train_out", None, "Path to output train tfrecords file")
+# tf.flags.DEFINE_string("validation_out", None, "Path to output validation tfrecords file")
+
+tf.flags.DEFINE_string("vocab", None, "Path to save vocabulary processor")
+tf.flags.DEFINE_string("entire_vocab", None, "Path to save vocabulary txt file")
 
 tf.flags.DEFINE_string("embedding_path", None, "Path to save vocabulary txt file")
 
 FLAGS = tf.flags.FLAGS
 
-TRAIN_PATH = os.path.join(FLAGS.train_in)
-VALIDATION_PATH = os.path.join(FLAGS.validation_in)
+# TRAIN_LEMMA_PATH = os.path.join(FLAGS.train_lemma_in)
+# TRAIN_JSON_PATH = os.path.join(FLAGS.train_json_in)
 
-# ADVISING_VOCAB_PATH = os.path.join(FLAGS.advising_vocab_path)
+# VALID_LEMMA_PATH = os.path.join(FLAGS.valid_lemma_in)
+# VALID_JSON_PATH = os.path.join(FLAGS.valid_json_in)
+
+TRAIN_LABEL = 'train_data/train_ubuntu/train_target.npy'
+VALID_LABEL = 'valid_data/valid_ubuntu/valid_target.npy'
+
+
+# VOCAB_PATH = os.path.join(FLAGS.vocab_path)
 # ENTIRE_VOCAB_PATH = os.path.join(FLAGS.entire_vocab_path)
 
-MAX_CONTEXT_LEN = 400
+MAX_CONTEXT_LEN = 1250#400
 MAX_UTTR_NUM = 42
-MAX_UTTERANCE_LEN = 90
+MAX_UTTERANCE_LEN = 230#90
+MAX_SUGGESTED_COURSES_LEN = 24
 
 def zerolistmaker(n):
     listofzeros = [0] * n
@@ -46,8 +58,8 @@ def count_len(input_filename):
     max_context_len = 0
     max_utterance_len = 0
 
-    context_len_list = zerolistmaker(10)
-    utterance_len_list = zerolistmaker(10)
+    context_len_list = zerolistmaker(20)
+    utterance_len_list = zerolistmaker(20)
 
     max_uttr_num = 0
     max_uttr_len = 0
@@ -89,6 +101,52 @@ def count_len(input_filename):
                 ### if utterance_len == 89:
                 ###     print(word)
     return context_len_list, utterance_len_list, max_context_len, max_utterance_len, max_uttr_num, max_uttr_len
+
+def count_true_len(input_filename, input_labelname):
+    max_context_len = 0
+    max_utterance_len = 0
+    max_true_utterance_len = 0
+    context_len_list = zerolistmaker(20)
+    utterance_len_list = zerolistmaker(20)
+    true_utterance_len_list = zerolistmaker(20)
+    idx = 0
+    label = np.load(input_labelname)
+    with open(input_filename, 'r') as f:
+        while True:
+            line = f.readline()
+            if not line: 
+                break
+            # line = line.replace('\n', ' ')
+            line = line[:-1]
+
+            word = line.split(' ')
+            context_len = len(word)
+            context_len_list[ int(context_len/100)] += 1
+            if context_len > max_context_len:
+                max_context_len = context_len
+
+            for i in range(100):
+                line = f.readline()
+                # line = line.replace('\n', ' ')
+                line = line[:-1]
+                word = line.split(' ')
+                utterance_len = len(word)
+                utterance_len_list[ int(utterance_len/100)] += 1
+                if utterance_len > max_utterance_len:
+                    max_utterance_len = utterance_len
+
+                if i == label[idx]:
+                    true_utterance_len = len(word)
+                    true_utterance_len_list[ int(utterance_len/100)] += 1
+                    if true_utterance_len > max_true_utterance_len:
+                        max_true_utterance_len = true_utterance_len
+                ### if utterance_len == 89:
+                ###     print(word)
+
+            idx=idx+1
+    return context_len_list, utterance_len_list, true_utterance_len_list,\
+            max_context_len, max_utterance_len, max_true_utterance_len
+
 
 def create_nparrays(input_filename, vocab):
 
@@ -149,7 +207,118 @@ def create_nparrays(input_filename, vocab):
 
     return context_set, utterance_set
 
-def create_nparrays2(input_filename, vocab):
+def create_nparrays_with_speaker(input_filename, json_filename, loc, mode, vocab):
+
+    # json_data=[]
+    # with open(json_filename, 'rb') as g:
+    #    json_data = json.load(g)
+    if mode == 1:
+        CONTEXT_PATH = loc.train_context_path
+        CONTEXT_SPEAKER_PATH = loc.train_context_speaker_path
+        OPTIONS_PATH = loc.train_options_path
+        OPTIONS_SPEAKER_PATH = loc.train_options_speaker_path
+    else:
+        CONTEXT_PATH = loc.valid_context_path# 'test1.file'#
+        CONTEXT_SPEAKER_PATH = loc.valid_context_speaker_path# 'test2.file'#
+        OPTIONS_PATH = loc.valid_options_path# 'test3.file'#
+        OPTIONS_SPEAKER_PATH = loc.valid_options_speaker_path# 'test4.file'#
+
+
+    with open(input_filename, 'r') as f, open(json_filename, 'rb') as g:
+        
+        context_set = []
+        context_speaker_set = []
+        utterance_set = []
+        
+        idx = 0
+        for json_data in ijson.items(g, "item"):
+            # Handle context
+            line = f.readline()
+            if not line: 
+                break
+
+            # eliminating '\n'
+            line = line[:-1]
+            line = line.split(' ')
+
+            # elimianating eot
+            context = []
+            context_speaker = []
+            
+            speaker_info = [1,0]
+            if json_data['messages-so-far'][0]['speaker'] == 'student':
+                speaker_info = [0,1]
+            
+            for item in line:
+                if item != '__eot__':
+                    context.append(item)
+                    context_speaker.append(speaker_info)
+                else:
+                    if speaker_info[0] == 0:
+                        speaker_info = [1, 0]
+                    else:
+                        speaker_info = [0, 1]
+
+                    # speaker_info[0], speaker_info[1] = speaker_info[1], speaker_info[0]
+                    # print(speaker_info)
+            context_len = len(context)
+    
+            context_transformed = [vocab.index(context[i])+1 for i in range(context_len)]
+            if context_len < MAX_CONTEXT_LEN:
+                context_transformed.extend(zerolistmaker(MAX_CONTEXT_LEN-context_len))
+                context_speaker.extend([[0,0] for k in range(MAX_CONTEXT_LEN-context_len)])
+            
+            elif context_len > MAX_CONTEXT_LEN:
+                context_transformed = context_transformed[context_len-MAX_CONTEXT_LEN:context_len]
+                context_speaker = context_speaker[context_len-MAX_CONTEXT_LEN:context_len]
+            
+            context_set.append(context_transformed)
+            # np.save(c, np.array(context_transformed))
+            # pickle.dump(context_transformed, c)
+
+            context_speaker_set.append(context_speaker)
+            # np.save(cs, np.array(context_speaker))
+            # pickle.dump(context_speaker, cs)
+            
+            temp_utterance_set = []
+            for i in range(100):
+                line = f.readline()
+                
+                # eliminating '\n'
+                line = line[:-1]
+                utterance = line.split(' ')
+                utterance_len = len(utterance)
+
+                utterance_transformed = [vocab.index(utterance[i])+1 for i in range(utterance_len)]
+                if utterance_len < MAX_UTTERANCE_LEN:
+                    utterance_transformed.extend(zerolistmaker(MAX_UTTERANCE_LEN-utterance_len))
+                                
+                elif utterance_len > MAX_UTTERANCE_LEN:
+                    utterance_transformed = utterance_transformed[:MAX_UTTERANCE_LEN]
+                                
+                temp_utterance_set.append(utterance_transformed)
+                
+            utterance_set.append(temp_utterance_set)
+            # np.save(o, np.array(temp_utterance_set))
+            # pickle.dump(np.array(temp_utterance_set), o)
+            
+            idx = idx+1
+            if idx%10000 == 0:
+                print(idx/1000, 'percent')
+            # break
+
+    context_set = np.array(context_set, dtype='i4')
+    context_speaker_set = np.array(context_speaker_set, dtype='i4')
+    utterance_set = np.array(utterance_set, dtype='i4')
+
+    np.save(CONTEXT_PATH, context_set)
+    np.save(CONTEXT_SPEAKER_PATH, context_speaker_set)
+    np.save(OPTIONS_PATH, utterance_set)
+    
+    # return context_set, context_speaker_set, utterance_set, utterance_speaker_set
+
+
+def create_nparrays_split_context(input_filename, vocab):
 
     with open(input_filename, 'r') as f:
         context_set = []
@@ -218,6 +387,56 @@ def create_nparrays2(input_filename, vocab):
             utterance_set.append(np.array(temp_utterance_set))
 
     return context_set, utterance_set
+
+def create_profile(json_filename, loc, mode, vocab):
+
+    if mode == 1:
+        PROFILE_PATH = loc.train_profile_path
+    else:
+        PROFILE_PATH = loc.valid_profile_path
+
+    max_suggested_courses_len= 0
+    suggested_courses_set = []
+    with open(json_filename, 'rb') as g:
+        
+        
+        idx = 0
+
+        for json_data in ijson.items(g, "item"):
+            suggested_courses_raw = json_data['profile']['Courses']['Suggested']
+            suggested_courses = []
+            suggested_courses_len = 0
+            ### suggested_courses_len = len(suggested_courses_raw)
+            ### if max_suggested_courses_len < suggested_courses_len:
+            ###     max_suggested_courses_len = suggested_courses_len
+
+            for data in suggested_courses_raw:
+                course_name = data['offering'][:data['offering'].index('-')].lower()
+                if course_name in vocab:
+                    suggested_courses.append(vocab.index(course_name))
+                    suggested_courses_len += 1
+            if max_suggested_courses_len < suggested_courses_len:
+                max_suggested_courses_len = suggested_courses_len
+
+            if suggested_courses_len < MAX_SUGGESTED_COURSES_LEN:
+                suggested_courses.extend(zerolistmaker(MAX_SUGGESTED_COURSES_LEN-suggested_courses_len))
+
+            
+            elif suggested_courses_len > MAX_SUGGESTED_COURSES_LEN:
+                print('There must be something wrong!!!')
+                break
+            
+            suggested_courses_set.append(suggested_courses)
+
+            idx = idx+1
+            if idx%10000 == 0:
+                print(idx/1000, 'percent')
+
+
+    suggested_courses_set = np.array(suggested_courses_set, dtype='i4')
+    np.save(PROFILE_PATH, suggested_courses_set)
+
+
 def generate_vocab_from_gensim(word_vec_path, vocab_path):
     vocab_size = 0
     vocab = []
@@ -241,7 +460,7 @@ def generate_vocab_from_gensim(word_vec_path, vocab_path):
             '''
     vocab_size = vocab[0]
     vocab = vocab[1:]
-    with open(FLAGS.vocab_path, 'w') as thefile:
+    with open(vocab_path, 'w') as thefile:
         for item in vocab:
             thefile.write("%s\n" % item)
 
@@ -256,43 +475,48 @@ if __name__ == "__main__":
     loc = create_data_locations()
 
     ####### Create advising vocab #######
-    advising_vocab = []
-    advising_vocab_size = 0
-    if FLAGS.advising_vocab_path is not None:
-        if os.path.isfile(FLAGS.advising_vocab_path) is False:
-            print("Advising Vocab does not exist... Creating to:", FLAGS.advising_vocab_path)
-            advising_vocab, advising_vocab_size = generate_vocab_from_gensim('/home/hjhwang/word2vec/advising_lemmatized_vector',
-                                                                                FLAGS.advising_vocab_path)
+    vocab = []
+    vocab_size = 0
+    if FLAGS.vocab is not None:
+        if os.path.isfile(FLAGS.vocab) is False:
+            print("Advising Vocab does not exist... Creating to:", FLAGS.vocab)
+            vocab, vocab_size = generate_vocab_from_gensim('/home/hjhwang/word2vec/wiki_ubuntu_lemmatized.vector',
+                                                                                FLAGS.vocab)
         else:
-            print("Advising Vocab exists!")
-            f = open(FLAGS.advising_vocab_path,'r')
+            print("Data Vocab exists!")
+            f = open(FLAGS.vocab,'r')
             A = f.read()
-            advising_vocab = A.split('\n')
-            advising_vocab_size = len(A)
+            vocab = A.split('\n')
+            vocab_size = len(A)
 
     ####### Create entire vocab #######
     entire_vocab = []
     entire_vocab_size = 0
-    if FLAGS.entire_vocab_path is not None:
-        if os.path.isfile(FLAGS.entire_vocab_path) is False:
-            print("Entire Vocab does not exist... Creating to", FLAGS.entire_vocab_path)
-            entire_vocab, entire_vocab_size = generate_vocab_from_gensim('/home/hjhwang/word2vec/wiki_advising_lemmatized.vector',
-                                                                            FLAGS.entire_vocab_path)
+    if FLAGS.entire_vocab is not None:
+        if os.path.isfile(FLAGS.entire_vocab) is False:
+            print("Entire Vocab does not exist... Creating to", FLAGS.entire_vocab)
+            entire_vocab, entire_vocab_size = generate_vocab_from_gensim('/home/hjhwang/word2vec/wiki_ubuntu_lemmatized.vector',
+                                                                            FLAGS.entire_vocab)
         else:
             print("Entire Vocab exists!")
-            f = open(FLAGS.entire_vocab_path,'r')
+            f = open(FLAGS.entire_vocab,'r')
             A = f.read()
             entire_vocab = A.split('\n')
             entire_vocab_size = len(A)
 
     ####### Extract advising embedding matrix from entire embedding matrix #######
     if FLAGS.embedding_path is not None:
+        ### Trick ###
+        # entire_vocab = vocab        # You sure???
+
+
         print("Creating to embedding matirx to", FLAGS.embedding_path)
-        entire_embedding_W = np.load('/home/hjhwang/word2vec/wiki_advising_lemmatized.model.trainables.syn1neg.npy')
+        # entire_embedding_W = np.load('/home/hjhwang/word2vec/wiki_advising_lemmatized.model.trainables.syn1neg.npy')
+        entire_embedding_W = np.load('/home/hjhwang/word2vec/wiki_ubuntu_lemmatized.model.trainables.syn1neg.npy')
         print("Entire embedding loaded!")
         embedding_W = [np.zeros(300,)]
         cnt = 0
-        for entry in advising_vocab:
+        for entry in vocab:
             if entry == '':
                 break
             elif entry =='cyptography\n':
@@ -305,16 +529,17 @@ if __name__ == "__main__":
 
         embedding_W = np.array(embedding_W)
         print("shape of embedding_W: ", embedding_W.shape)
-        np.save('/home/hjhwang/Codes/dstc7-keras/data/embedding_W.npy', embedding_W)
-
+        # np.save('/home/hjhwang/Codes/dstc7-keras/data/embedding_W.npy', embedding_W)
+        np.save(FLAGS.embedding_path, embedding_W)
 
     ####### Count len #######
+
     '''
     print("In Training dataset: (Context / Utterance)")
     context_len_list, utterance_len_list,\
     max_context_len, max_utterance_len,\
-    max_uttr_num, max_uttr_len = count_len(TRAIN_PATH)
-    for i in range(10):
+    max_uttr_num, max_uttr_len = count_len(TRAIN_LEMMA_PATH)
+    for i in range(20):
         print("len less than ",(i+1)*100, ': ', context_len_list[i], ' / ', utterance_len_list[i])
     print("max len: ", max_context_len, ' / ', max_utterance_len)
     print("max number of uttr in Context:", max_uttr_num)
@@ -324,8 +549,8 @@ if __name__ == "__main__":
     print("In Validation dataset: (Context / Utterance)")
     context_len_list, utterance_len_list,\
     max_context_len, max_utterance_len,\
-    max_uttr_num, max_uttr_len = count_len(VALIDATION_PATH)
-    for i in range(10):
+    max_uttr_num, max_uttr_len = count_len(VALID_LEMMA_PATH)
+    for i in range(20):
         print("len less than ",(i+1)*100, ': ', context_len_list[i], ' / ', utterance_len_list[i])
     print("max len: ", max_context_len, ' / ',  max_utterance_len)
     print("max number of uttr in Context:", max_uttr_num)
@@ -359,21 +584,91 @@ if __name__ == "__main__":
     # Create nparray of Training set
     '''
     print("Creating np_arrays of Training set...")
-    context, options = create_nparrays2(input_filename=TRAIN_PATH, vocab=advising_vocab)
+    context, options = create_nparrays_split_context(input_filename=TRAIN_PATH, vocab=vocab)
     print("Writing np_arrays of Training set...")
     context = np.array(context)
     options = np.array(options)
     np.save(loc.train_context_path, context)
     np.save(loc.train_options_path, options)
     print("Done.")
-    '''
+    
     # Create nparray of Valdation set
     print("Creating np_arrays of Validation set...")
-    context, options = create_nparrays2(input_filename=VALIDATION_PATH, vocab=advising_vocab)
+    context, options = create_nparrays_split_context(input_filename=VALIDATION_PATH, vocab=vocab)
     print("Writing np_arrays of Validation set...")
     context = np.array(context)
     options = np.array(options)
     np.save(loc.valid_context_path, context)
     np.save(loc.valid_options_path, options)
     print("Done.")
+    '''
 
+    '''
+    print("Creating np_arrays of Training set...")
+    context, context_speaker, options, options_speaker\
+    = create_nparrays_with_speaker(input_filename=TRAIN_LEMMA_PATH, json_filename=TRAIN_JSON_PATH, loc=loc, mode=1, vocab=vocab)
+    print("Writing np_arrays of TRAINING set...")
+    context = np.array(context)
+    context_speaker = np.array(context_speaker)
+    options = np.array(options)
+    options_speaker = np.array(options_speaker)
+    np.save(loc.train_context_path, context)
+    np.save(loc.train_context_speaker_path, context_speaker)
+    np.save(loc.train_options_path, options)
+    np.save(loc.train_options_speaker_path, options_speaker)
+    print("Done.")
+
+
+    print("Creating np_arrays of Validation set...")
+    context, context_speaker, options, options_speaker\
+    = create_nparrays_with_speaker(input_filename=VALID_LEMMA_PATH, json_filename=VALID_JSON_PATH, loc=loc, mode=2, vocab=vocab)
+    print("Writing np_arrays of Validation set...")
+    context = np.array(context)
+    context_speaker = np.array(context_speaker)
+    options = np.array(options)
+    options_speaker = np.array(options_speaker)
+    np.save(loc.valid_context_path, context)
+    np.save(loc.valid_context_speaker_path, context_speaker)
+    np.save(loc.valid_options_path, options)
+    np.save(loc.valid_options_speaker_path, options_speaker)
+    print("Done.")
+    '''
+
+    ##########################################################
+    '''
+    print("In Training dataset: (Context / Utterance / True Utterance)")
+    context_len_list, utterance_len_list, true_utterance_len_list,\
+    max_context_len, max_utterance_len, max_true_utterance_len\
+    = count_true_len(TRAIN_LEMMA_PATH, TRAIN_LABEL)
+    for i in range(20):
+        print("len less than ",(i+1)*100, ': ', context_len_list[i], ' / ',
+                                                utterance_len_list[i], ' / ',
+                                                true_utterance_len_list[i])
+    print("max len: ", max_context_len, ' / ', max_utterance_len, ' / ', max_true_utterance_len)
+
+
+    print("In Validation dataset: (Context / Utterance / True Utterance)")
+    context_len_list, utterance_len_list, true_utterance_len_list,\
+    max_context_len, max_utterance_len, max_true_utterance_len\
+    = count_true_len(VALID_LEMMA_PATH, VALID_LABEL)
+    for i in range(20):
+        print("len less than ",(i+1)*100, ': ', context_len_list[i], ' / ',
+                                                utterance_len_list[i], ' / ',
+                                                true_utterance_len_list[i])
+    print("max len: ", max_context_len, ' / ',  max_utterance_len, ' / ', max_true_utterance_len)
+
+    '''
+
+    print("Creating np_arrays of Training set...")
+    create_nparrays_with_speaker(input_filename=TRAIN_LEMMA_PATH, json_filename=TRAIN_JSON_PATH, loc=loc, mode=1, vocab=vocab)
+    print("Creating np_arrays of Validation set...")
+    create_nparrays_with_speaker(input_filename=VALID_LEMMA_PATH, json_filename=VALID_JSON_PATH, loc=loc, mode=2, vocab=vocab)
+    print("Done.")
+
+
+    '''
+    count = create_profile(json_filename=TRAIN_JSON_PATH, loc=loc, mode=1, vocab=vocab)
+    print(count)
+    count = create_profile(json_filename=VALID_JSON_PATH, loc=loc, mode=0, vocab=vocab)
+    print(count)
+    '''

@@ -3,8 +3,8 @@ import linecache
 #from nltk.stem import WordNetLemmatizer
 
 #lemmatizer = WordNetLemmatizer()
-fname = 'advising_train_and_dev_lemmatized_final_text.txt'
-target = np.load('advising_train_target.npy')
+fname = 'data/advising_only/advising_lemmatized_train.txt'
+target = np.load('train_data/train_advising/train_target.npy')
 
 while True:
 
@@ -18,6 +18,7 @@ while True:
         break
     if command == 'y':
         idx = int(input("What number of example do you want to see? : index starts from 0 : "))
+        print('\n\nIn '+str(idx)+'th sample:')
         print("\nQuestion : ---------------------------------------------------------------------------------------------\n")
         question = linecache.getline(fname,idx*101+1)
         #import pdb; pdb.set_trace()
@@ -31,6 +32,9 @@ while True:
                 print( word+'\n')
                 #print( word2+'\n')
         
+        print("\n\nAnswer : ---------------------------------------------------------------------------------------------\n")
+        print(str(target[idx])+':', linecache.getline(fname, idx*101+2+target[idx]))
+
         print("\n\nAnswer candidates : ----------------------------------------------------------------------------------\n")
         for i in range(100):
             answer = linecache.getline(fname, idx*101+2+i)
@@ -38,11 +42,11 @@ while True:
             if i == target[idx]:
                 save_answer = answer
             
-            print(i, ' : ',answer, end='')
+            print(str(i)+':',answer, end='')
             #print(i, ' : ',answer2)
 
-        print("\n\nAnswer : ---------------------------------------------------------------------------------------------\n")
-        print(target[idx], save_answer,'\n')
+        # print("\n\nAnswer : ---------------------------------------------------------------------------------------------\n")
+        # print(target[idx], save_answer,'\n')
         #print(target[target_idx], lemmatizer.lemmatize(save_answer),'\n')
         #target_idx += 1
 

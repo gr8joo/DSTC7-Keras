@@ -18,18 +18,18 @@ tf.flags.DEFINE_integer(
 tf.flags.DEFINE_integer("max_sentence_len", 160, "Maximum Sentence Length")
 
 tf.flags.DEFINE_string("train_in", None, "Path to input data file")
-tf.flags.DEFINE_string("validation_in", None, "Path to validation data file")
+tf.flags.DEFINE_string("valid_in", None, "Path to validation data file")
 
 tf.flags.DEFINE_string("train_out", None, "Path to output train tfrecords file")
-tf.flags.DEFINE_string("validation_out", None, "Path to output validation tfrecords file")
+tf.flags.DEFINE_string("valid_out", None, "Path to output validation tfrecords file")
 
 tf.flags.DEFINE_string("vocab_path", None, "Path to save vocabulary txt file")
 tf.flags.DEFINE_string("vocab_processor", None, "Path to save vocabulary processor")
 
 FLAGS = tf.flags.FLAGS
 
-TRAIN_PATH = os.path.join(FLAGS.train_in)
-VALIDATION_PATH = os.path.join(FLAGS.validation_in)
+# TRAIN_PATH = os.path.join(FLAGS.train_in)
+VALIDATION_PATH = os.path.join(FLAGS.valid_in)
 
 
 def process_dialog(dialog):
@@ -88,6 +88,7 @@ if __name__ == "__main__":
 
 
     target = np.load('valid_data/valid_advising/valid_target.npy')
+    # target = np.load('train_data/train_advising/train_target.npy')
     with open(VALIDATION_PATH, 'rb') as f:
         json_data = json.load(f)
         while True:
