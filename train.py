@@ -91,10 +91,10 @@ def main():
     # inputs = [context, context_speaker, utterances, profile]
     
 
-    # probs = dual_encoder_model(hparams, context, context_speaker, utterances)
+    probs = dual_encoder_model(hparams, context, context_speaker, utterances)
     # probs = dual_encoder_model(hparams, context, context_speaker, utterances, profile)
     # probs = cnn_1d_model(hparams, context, context_speaker, utterances)
-    probs = memLstm_model(hparams, context, context_speaker, utterances)
+    # probs = memLstm_model(hparams, context, context_speaker, utterances)
     # probs = memLstm_model(hparams, context, context_speaker, utterances, profile)
 
 
@@ -139,7 +139,6 @@ def main():
 
 
 
-    ############################# TRAIN #############################
     # train_X = [train_context, train_context_speaker, train_options]
     # train_X = [train_context, train_context_speaker, train_options, train_profile]
     # train_Y = train_target
@@ -149,6 +148,7 @@ def main():
     valid_Y = valid_target
 
 
+    ############################# TRAIN #############################
     ### model.fit(train_X, train_Y, batch_size=hparams.batch_size,
     ### 	        epochs=hparams.num_epochs,validation_data=(valid_X, valid_Y), verbose=1)#, callbacks=[tensorboard])#, callbacks=[checkpointer])
    
@@ -181,7 +181,8 @@ def main():
 
     '''
     ############################# EVALUATE #############################
-    model.load_weights('weights/memLstm2_bicon2_profile/2hops_3_5_1180.h5')
+    # model.load_weights('weights/memLstm2_bicon2_profile/2hops_3_5_1180.h5')
+    model.load_weights('weights/13hops_2_9_1807.h5')
     score=model.evaluate(valid_X, valid_Y)
     print(score)
 

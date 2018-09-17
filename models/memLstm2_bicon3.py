@@ -16,7 +16,7 @@ def memLstm_model(hparams, context, context_speaker, utterances):
 
     # Use embedding matrix pretrained by Gensim
     # embeddings_W = np.load('data/advising/wiki_advising_embedding_W.npy')
-    embeddings_W = np.load('data/ubuntu/wiki_ubuntu_embedding_W.npy')
+    embeddings_W = np.load('data/wiki_ubuntu_uKB_embedding_W.npy')
     print("embeddings_W: ", embeddings_W.shape)
     
 

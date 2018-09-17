@@ -13,20 +13,14 @@ import models.helpers as helpers
 
 from hyperparams import create_hyper_parameters
 
-
-from models.memLstm2_bicon3_custom import memLstm_custom_model
+# from models.memLstm2_bicon4 import memLstm_custom_model
+# from models.memLstm2_bicon4_amp import memLstm_custom_model
+from models.memLstm2_bicon4_bisum import memLstm_custom_model
 
 from keras.layers import Input
 from keras.models import Model
 from keras.callbacks import ModelCheckpoint
 
-def custom_loss(probs):
-    def loss(y_true, y_pred):
-        mse_loss = -K.sum(K.square(probs))
-        # K.update_add(mse_loss, 2*K.square(probs[y_true]))
-        mse_loss = mse_loss + 2*K.square(probs[y_true])
-        return mse_loss
-    return loss
 
 def hack_loss(y_true, y_pred):
         return K.zeros((1,))
@@ -96,8 +90,7 @@ def main():
     model.summary()
 
 
-    ############################# Load Validation Datas #############################    
-
+    ############################# Load Datas #############################    
     print("Loading validation data")
     valid_context = np.load(hparams.valid_context_path)
     # valid_context_speaker =np.load(hparams.valid_context_speaker_path)
@@ -109,20 +102,18 @@ def main():
     # valid_options_len = np.load(hparam.valid_context_path)
     # valid_profile = np.load(hparams.valid_profile_path)
 
+
     valid_context_mask = hparams.neg_inf * valid_context_mask
 
-    # train_X = [train_context, train_context_speaker, train_options]
-    # train_X = [train_context, train_context_speaker, train_options, train_profile]
-    # train_Y = train_target
     
     valid_X = [valid_context, valid_context_mask, valid_options]
     # valid_X = [valid_context, valid_context_speaker, valid_options, valid_profile]
-    valid_Y = [valid_target, np.zeros((5000,1,1,1),dtype='i4'),
+    valid_Y = [valid_target, np.zeros((5000,1,1),dtype='i4'),
                                 np.zeros((5000,1,1,1,1), dtype='i4'),
                                 np.zeros((5000,1,1,1,1), dtype='i4')]
 
-    '''
-    ############################# Load Training datas #############################
+
+    ############################# TRAIN #############################
     print("Loading training data")
     train_context = np.load(hparams.train_context_path)
     # train_context_speaker =np.load(hparams.train_context_speaker_path)
@@ -134,14 +125,22 @@ def main():
     # train_options_len = np.load(hparam.train_context_path)
     # train_profile = np.load(hparams.train_profile_path)
 
+
     train_context_mask = hparams.neg_inf * train_context_mask
 
-    ############################# TRAIN #############################
-    ### model.fit(train_X, train_Y, batch_size=hparams.batch_size,
-    ### 	        epochs=hparams.num_epochs,validation_data=(valid_X, valid_Y), verbose=1)#, callbacks=[tensorboard])#, callbacks=[checkpointer])
 
+    # train_X = [train_context, train_context_speaker, train_options]
+    # train_X = [train_context, train_context_speaker, train_options, train_profile]
+    # train_Y = train_target
+
+    ### model.fit(train_X, train_Y, batch_size=hparams.batch_size,
+    ###             epochs=hparams.num_epochs,validation_data=(valid_X, valid_Y), verbose=1)#, callbacks=[tensorboard])#, callbacks=[checkpointer])
+   
     # of actual epochs
     val_acc=0
+    final_model = None
+    k=0
+    l=0
     for i in range(10):
         print('\nMAIN EPOCH:', i+1)
         print('==================================================================================================')
@@ -157,21 +156,24 @@ def main():
             train_Y = np.take(train_target, sub_idx, axis=0)
 
             A = model.fit(train_X, [train_Y,
-                                    np.zeros((10000,1,1,1), dtype='i4'),
+                                    np.zeros((10000,1,1), dtype='i4'),
                                     np.zeros((10000,1,1,1,1), dtype='i4'),
                                     np.zeros((10000,1,1,1,1), dtype='i4')],
                                     batch_size=hparams.batch_size,
                                     epochs=1,validation_data=(valid_X, valid_Y), verbose=1)#, callbacks=[checkpointer])
             # for key in A.history.keys():
             #     print(key)
+            
             if A.history['val_probs_acc'][0] > val_acc:
                 val_acc = A.history['val_probs_acc'][0]
-            if A.history['val_probs_acc'][0] >= 0.1800:
-                model.save_weights(hparams.weights_path+'_'+str(i)+'_'+str(j)+'_'+str(int(A.history['val_probs_acc'][0]*10000))+'_reverse.h5', overwrite=True)
+                k = i
+                l = j
+                final_model = model
+
 
 
     print('Best acc:',val_acc)
-    # model.save_weights(hparams.weights_path+str(int(A.history['val_probs_acc'][0]*10000))+'.h5', overwrite=True)
+    final_model.save_weights(hparams.weights_path+'_'+str(k)+'_'+str(l)+'_'+str(int(val_acc*10000))+'_amp'+str(hparams.amplify_val)+'_2.h5', overwrite=True)
 
     '''
     ############################# EVALUATE #############################
@@ -182,7 +184,7 @@ def main():
 
     # model.load_weights('weights/memLstm2_bicon2_profile/2hops_3_5_1180.h5')
     # model.load_weights('weights/memLstm2_bicon3_ubuntu_shrink/9hops_2_9_1880.h5')
-    model.load_weights('weights/memLstm2_bicon3_ubuntu/3hops_2_9_1846.h5')
+    model.load_weights('weights/memLstm2_bicon4_amp/2hops_2_9_1923_amp5.h5')
     score=model.evaluate(valid_X, valid_Y)
     print(score)
 
@@ -199,7 +201,15 @@ def main():
     print(predict_Y.shape)
     print(context_attention.shape)
     print(responses_attention.shape)
-    
+
+    # context_argmax = [np.argsort(context_attetion[i][::-1] for i in range(len(predict_Y)))
+    context_argmax = np.argsort(context_attention, axis=-1)
+    # context_argmax = context_argmax[:,:,hparams.max_context_len-hparams.hops:]
+    context_argmax = context_argmax[:,:,hparams.max_context_len-5:]
+    context_argmax = np.flip(context_argmax, axis=-1)
+    print('context_argmax:',context_argmax.shape)
+    responses_attention = np.swapaxes(responses_attention, 1,3)
+    responses_argmax = np.argmax(responses_attention, axis=-1)
 
     sorted_predict_Y = [np.argsort(predict_Y[i])[::-1] for i in range(len(predict_Y))]    
     prediction_set = [(target_X[i],sorted_predict_Y[i][:10]) for i in range(len(predict_Y))]
@@ -215,40 +225,40 @@ def main():
             wrong_sample +=1
 
     print(" Among {} samples, model predicted {} samples correct, {} samples wrong.".format(len(predict_Y),correct_sample,wrong_sample))
-    context_attention = np.swapaxes(context_attention, 1,2)
-    context_argmax = np.argmax(context_attention, axis=-1)
-    responses_attention = np.swapaxes(responses_attention, 1,3)
-    responses_argmax = np.argmax(responses_attention, axis=-1)
-
-    correct_sample = 0
+    
     for i in range(valid_target.shape[0]):
         context = valid_context[i]
+        context_att = context_attention[i]
         context_arg = context_argmax[i]
         responses_arg = responses_argmax[i]
         if valid_target[i] == predict_target[i]:
             correct_sample += 1
-            print(i, 'sample: (attention on Forward / Backward')
+            print(i, 'sample: (attention on Forward / Backward)')
             # print(context_argmax[i][0])
             # print(valid_context[i][ context_argmax[i][0] ])
             # print(vocab[ valid_context[i][context_argmax[i][0]] ])
-            print('Context :', [ str(context_arg[0][j])+\
-                                ' ('+vocab[ context[context_arg[0][j]]-1 ]+')'\
-                                for j in range(hparams.hops) ],
-                                [ str(context_arg[1][j])+\
-                                ' ('+vocab[ context[context_arg[1][j]]-1 ]+')'\
-                                for j in range(hparams.hops) ] )
-            print('Response:', [ str(responses_arg[predict_target[i]][0][j])+\
-                                ' ('+vocab[ context[responses_arg[predict_target[i]][0][j]]-1 ]+')'\
-                                for j in range(hparams.hops)],
-                                [ str(responses_arg[predict_target[i]][1][j])+\
-                                ' ('+vocab[ context[responses_arg[predict_target[i]][1][j]]-1 ]+')'\
+            print('Attention: ', [ context_att[0][context_arg[0][j]]\
+                                    for j in range(len(context_arg[0])) ], ' / ',
+                                 [ context_att[1][context_arg[1][j]]\
+                                    for j in range(len(context_arg[1])) ], ' / ',
+                                    )
+            print('Context :', [ vocab[ context[context_arg[0][j]]-1 ]+\
+                                '('+str(context_arg[0][j])+')'\
+                                for j in range(len(context_arg[0])) ], ' / ',
+                                [ vocab[ context[context_arg[1][j]]-1 ]+\
+                                '('+str(context_arg[1][j])+')'\
+                                for j in range(len(context_arg[1])) ] )
+            print('Response:', [ vocab[ context[responses_arg[predict_target[i]][0][j]]-1 ]+\
+                                '('+str(responses_arg[predict_target[i]][0][j])+')'\
+                                for j in range(hparams.hops)], ' / ',
+                                [ vocab[ context[responses_arg[predict_target[i]][1][j]]-1 ]+\
+                                '('+str(responses_arg[predict_target[i]][1][j])+')'\
                                 for j in range(hparams.hops)], '\n')
-    print('Accuracy:', correct_sample/float(valid_target.shape[0]))
 
     import pdb; pdb.set_trace()
     np.save('context_attention.npy', context_attention)
     np.save('responses_attenntion.npy', responses_attention)
     np.save('responses_dot.npy', responses_dot)
-
+    '''
 if __name__ == "__main__":
     main()
