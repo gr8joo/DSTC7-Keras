@@ -74,7 +74,9 @@ def process_dialog(dialog):
         row.append(target_index)
 
     # Create profile of the student
-    profile = dialog['profile']
+    # profile = dialog['profile']
+    profile = None
+
     # categories = [key for val, key in enumerate(profile)]
 
     # print(len(categories[0]), len(categories[1]), len(categories[2]), len(categories[3]))
@@ -87,7 +89,8 @@ if __name__ == "__main__":
     loc = create_data_locations()
 
 
-    target = np.load('valid_data/valid_advising/valid_target.npy')
+    # target = np.load('valid_data/valid_advising/valid_target.npy')
+    target = np.load('valid_data/valid_ubuntu/valid_target.npy')
     # target = np.load('train_data/train_advising/train_target.npy')
     with open(VALIDATION_PATH, 'rb') as f:
         json_data = json.load(f)
@@ -99,6 +102,7 @@ if __name__ == "__main__":
             print(row[0], '\n')
             print("========================= Correct Answer ========================")
             print(str(target[idx])+': '+row[target[idx]+1]+'\n')
+            '''
             print("============================ Profile ============================")
 
             print("Standing: "+str(profile['Standing']))
@@ -144,6 +148,7 @@ if __name__ == "__main__":
                 print(suggested_courses[i]['offering']+' / '+suggested_courses[i]['instructor'])
 
             print('')
+            '''
             print("============================ utterances ==========================")
             for i in range(100):
                 print(str(i)+': '+row[i+1])

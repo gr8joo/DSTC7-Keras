@@ -3,9 +3,10 @@ import numpy as np
 import random
 from locations import create_data_locations
 
-MAX_CONTEXT_LEN = 400
-MAX_UTTERANCE_LEN = 90
+MAX_CONTEXT_LEN = 600#400
+MAX_UTTERANCE_LEN = 140#90
 loc = create_data_locations()
+
 train_context = np.load(loc.train_context_path)
 # train_context_len = np.load(loc.train_context_len_path)
 # train_target = np.load(loc.train_target_path)
@@ -35,8 +36,8 @@ print("options: ", valid_options.shape)
 # print("options_len: ", valid_options_len.shape)
 print("")
 print("=====================================ETC=====================================")
-print(train_context[0])
-print(valid_context[0][3])
+# print(train_context[0])
+print(valid_context[0])
 # print(valid_target)
 
 # a = set(train_target)
@@ -44,17 +45,43 @@ print(valid_context[0][3])
 # b = set(valid_target)
 # print("Valid_target_set: ", b)
 print("===================================Recovery======================================")
-with open('/home/hjhwang/Codes/dstc7-keras/data/advising_lemma_vocab.txt','r') as f:
+with open('/home/hjhwang/Codes/dstc7-keras/data/ubuntu_uKB_test_lemma_vocab.txt','r') as f:
     A = f.read()
-    advising_vocab = A.split('\n')
+    vocab = A.split('\n')
 
     print("Advising vocab exists!")
+    '''
+    # Visualize valid data (original)
 
+    while True:
+        idx = int(input("Example index (starts from 0): "))
+        recovery_context = [ vocab[ valid_context[idx][i]-1 ]\
+                                for i in range(MAX_CONTEXT_LEN) if valid_context[idx][i]>0]
+        print("----------------------------Context----------------------------")
+        str = ''
+        for i in range(len(recovery_context)):
+            # print(recovery_context[i])
+            str += recovery_context[i] + ' '
+            if recovery_context[i] == '__eou__':
+                print(str)
+                str = ''
+        # do = [ int(valid_options[0][idx][i]) for i in range(100)]
+        print("----------------------------Options----------------------------")
+        for i in range(100):
+            recovery = [ vocab[ valid_options[idx][i][j]-1 ]\
+                                for j in range(MAX_UTTERANCE_LEN) if valid_options[idx][i][j]>0]
+            str = ''
+            for j in range(len(recovery)):
+                # print(recovery_context[i])
+                str += recovery[j] + ' '
+            print(i,':', str)
+
+    '''
     # Visualize training data (original)
 
     while True:
         idx = int(input("Example index (starts from 0): "))
-        recovery_context = [ advising_vocab[ train_context[idx][i]-1 ]\
+        recovery_context = [ vocab[ train_context[idx][i]-1 ]\
                                 for i in range(MAX_CONTEXT_LEN) if train_context[idx][i]>0]
         print("----------------------------Context----------------------------")
         str = ''
@@ -67,7 +94,7 @@ with open('/home/hjhwang/Codes/dstc7-keras/data/advising_lemma_vocab.txt','r') a
         # do = [ int(valid_options[0][idx][i]) for i in range(100)]
         print("----------------------------Options----------------------------")
         for i in range(100):
-            recovery = [ advising_vocab[ train_options[idx][i][j]-1 ]\
+            recovery = [ vocab[ train_options[idx][i][j]-1 ]\
                                 for j in range(MAX_UTTERANCE_LEN) if train_options[idx][i][j]>0]
             str = ''
             for j in range(len(recovery)):
@@ -82,7 +109,7 @@ with open('/home/hjhwang/Codes/dstc7-keras/data/advising_lemma_vocab.txt','r') a
 
         print("----------------------------Context----------------------------")        
         for i in range(42):
-            recovery_context = [ advising_vocab[ train_context[idx][i][j]-1 ] for j in range(90) if train_context[idx][i][j]>0]
+            recovery_context = [ vocab[ train_context[idx][i][j]-1 ] for j in range(90) if train_context[idx][i][j]>0]
             str = ''
             for i in range(len(recovery_context)):
                 # print(recovery_context[i])
@@ -92,7 +119,7 @@ with open('/home/hjhwang/Codes/dstc7-keras/data/advising_lemma_vocab.txt','r') a
         # do = [ int(valid_options[0][idx][i]) for i in range(100)]
         print("----------------------------Options----------------------------")
         for i in range(100):
-            recovery = [ advising_vocab[ train_options[idx][i][j]-1 ] for j in range(90) if train_options[idx][i][j]>0]
+            recovery = [ vocab[ train_options[idx][i][j]-1 ] for j in range(90) if train_options[idx][i][j]>0]
             str = ''
             for j in range(len(recovery)):
                 # print(recovery_context[i])
@@ -106,7 +133,7 @@ with open('/home/hjhwang/Codes/dstc7-keras/data/advising_lemma_vocab.txt','r') a
 
         print("----------------------------Context----------------------------")        
         for i in range(42):
-            recovery_context = [ advising_vocab[ valid_context[idx][i][j]-1 ] for j in range(90) if valid_context[idx][i][j]>0]
+            recovery_context = [ vocab[ valid_context[idx][i][j]-1 ] for j in range(90) if valid_context[idx][i][j]>0]
             str = ''
             for i in range(len(recovery_context)):
                 # print(recovery_context[i])
@@ -116,7 +143,7 @@ with open('/home/hjhwang/Codes/dstc7-keras/data/advising_lemma_vocab.txt','r') a
         # do = [ int(valid_options[0][idx][i]) for i in range(100)]
         print("----------------------------Options----------------------------")
         for i in range(100):
-            recovery = [ advising_vocab[ valid_options[idx][i][j]-1 ] for j in range(90) if valid_options[idx][i][j]>0]
+            recovery = [ vocab[ valid_options[idx][i][j]-1 ] for j in range(90) if valid_options[idx][i][j]>0]
             str = ''
             for j in range(len(recovery)):
                 # print(recovery_context[i])

@@ -15,7 +15,8 @@ from hyperparams import create_hyper_parameters
 
 # from models.memLstm2_bicon4 import memLstm_custom_model
 # from models.memLstm2_bicon4_amp import memLstm_custom_model
-from models.memLstm2_bicon4_bisum import memLstm_custom_model
+from models.memLstm2_bicon4_amp2 import memLstm_custom_model
+# from models.memLstm2_bicon4_bisum import memLstm_custom_model
 
 from keras.layers import Input
 from keras.models import Model
@@ -90,7 +91,7 @@ def main():
     model.summary()
 
 
-    ############################# Load Datas #############################    
+    ############################# Load Validation Datas #############################    
     print("Loading validation data")
     valid_context = np.load(hparams.valid_context_path)
     # valid_context_speaker =np.load(hparams.valid_context_speaker_path)
@@ -112,7 +113,7 @@ def main():
                                 np.zeros((5000,1,1,1,1), dtype='i4'),
                                 np.zeros((5000,1,1,1,1), dtype='i4')]
 
-
+    '''
     ############################# TRAIN #############################
     print("Loading training data")
     train_context = np.load(hparams.train_context_path)
@@ -166,14 +167,12 @@ def main():
             
             if A.history['val_probs_acc'][0] > val_acc:
                 val_acc = A.history['val_probs_acc'][0]
-                k = i
-                l = j
-                final_model = model
-
+                if val_acc >= 0.18:
+                    model.save_weights(hparams.weights_path+'_'+str(i)+'_'+str(j)+'_'+str(int(val_acc*10000))+'_amp2.h5', overwrite=True)
 
 
     print('Best acc:',val_acc)
-    final_model.save_weights(hparams.weights_path+'_'+str(k)+'_'+str(l)+'_'+str(int(val_acc*10000))+'_amp'+str(hparams.amplify_val)+'_2.h5', overwrite=True)
+    # import pdb; pdb.set_trace()
 
     '''
     ############################# EVALUATE #############################
@@ -184,7 +183,9 @@ def main():
 
     # model.load_weights('weights/memLstm2_bicon2_profile/2hops_3_5_1180.h5')
     # model.load_weights('weights/memLstm2_bicon3_ubuntu_shrink/9hops_2_9_1880.h5')
-    model.load_weights('weights/memLstm2_bicon4_amp/2hops_2_9_1923_amp5.h5')
+    # model.load_weights('weights/memLstm2_bicon4_amp/2hops_3_9_1933_amp5.h5')
+    # model.load_weights('weights/memLstm2_bicon4_bisum/2hops_2_8_2066_bisum.h5')
+    model.load_weights('/ext2/dstc7/weights/memLstm2_bicon4_amp2/1hops_3_9_2020_amp2.h5')
     score=model.evaluate(valid_X, valid_Y)
     print(score)
 
@@ -259,6 +260,6 @@ def main():
     np.save('context_attention.npy', context_attention)
     np.save('responses_attenntion.npy', responses_attention)
     np.save('responses_dot.npy', responses_dot)
-    '''
+
 if __name__ == "__main__":
     main()
