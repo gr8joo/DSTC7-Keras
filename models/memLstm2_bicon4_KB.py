@@ -1,24 +1,28 @@
-import models.helpers as helpers
+# import models.helpers as helpers
 
 import numpy as np
 import keras
 
 from keras import backend as K
 from keras.layers import Dense, TimeDistributed, Activation, LSTM, Bidirectional, Dropout, Masking, RepeatVector
-from keras.layers import Embedding, Reshape, Lambda, Permute, NonMasking, Add, Dot, Multiply, Concatenate
+from keras.layers import Embedding, Reshape, Lambda, Permute, Add, Dot, Multiply, Concatenate
 
 
-def memLstm_custom_model(hparams, context, context_mask, utterances):
+def memLstm_custom_model(hparams,
+                            context, context_mask,
+                            utterances,
+                            kb_entities, kb_entity_flags, kb_mask):
 
     print("context_shape: ", context._keras_shape)
     print("utterances_shape: ", utterances._keras_shape)
     print("context_mask: ", context_mask._keras_shape)
+    print("kb_entity_flags shape: ", kb_entity_flags._keras_shape)
 
     # Use embedding matrix pretrained by Gensim
     # embeddings_W = np.load('data/advising/wiki_advising_embedding_W.npy')
-    embeddings_W = np.load('data/wiki_ubuntu_uKB_test_embedding_W.npy')
+    embeddings_W = np.load('/ext2/dstc7/data/wiki_ubuntu_uKB_test_embedding_W.npy')
     print("embeddings_W: ", embeddings_W.shape)
-    
+
 
     ################################## Define Regular Layers ##################################
     # Utterances Embedding (Output shape: NUM_OPTIONS(100) x BATCH_SIZE(?) x LEN_SEQ(160) x EMBEDDING_DIM(300))
@@ -28,7 +32,7 @@ def memLstm_custom_model(hparams, context, context_mask, utterances):
                             input_length=hparams.max_context_len,
                             mask_zero=True,
                             trainable=False)
-    
+
     embedding_utterance_layer = Embedding(input_dim=hparams.vocab_size,
                             output_dim=hparams.memn2n_embedding_dim,
                             weights=[embeddings_W],
@@ -36,9 +40,16 @@ def memLstm_custom_model(hparams, context, context_mask, utterances):
                             mask_zero=True,
                             trainable=False)
 
+    embedding_kb_layer = Embedding(input_dim=hparams.vocab_size,
+                            output_dim=hparams.memn2n_embedding_dim,
+                            weights=[embeddings_W],
+                            input_length=hparams.max_kb_len,
+                            mask_zero=True,
+                            trainable=False)
+
     # Define LSTM Context encoder 1
     LSTM_A = LSTM(hparams.memn2n_rnn_dim,
-                        input_shape=(hparams.max_context_len, hparams.memn2n_embedding_dim+2),
+                        input_shape=(hparams.max_context_len, hparams.memn2n_embedding_dim),
                         use_bias=True,
                         unit_forget_bias=True,
                         return_state=True,
@@ -52,20 +63,29 @@ def memLstm_custom_model(hparams, context, context_mask, utterances):
                         return_state=False,
                         return_sequences=False)
 
+    # Define LSTM KBs
+    LSTM_K = LSTM(hparams.memn2n_rnn_dim,
+                        input_shape=(hparams.max_kb_len, hparams.memn2n_embedding_dim),
+                        use_bias=True,
+                        unit_forget_bias=True,
+                        return_state=False,
+                        return_sequences=False)
+
 
     # Define Dense layer to transform utterances
     Dense_1 = Dense(hparams.memn2n_rnn_dim,
-                    use_bias=True,
+                    use_bias=False,
                     kernel_initializer=keras.initializers.TruncatedNormal(mean=0.0, stddev=1.0, seed=None),
                     input_shape=(hparams.memn2n_rnn_dim,))
 
     # Define Dense layer to do softmax
-    Dense_2 = Dense(1, input_shape=(hparams.memn2n_rnn_dim*2,))
+    Dense_2 = Dense(1, input_shape=(hparams.memn2n_rnn_dim+2,), use_bias=False)
+    Dense_3 = Dense(1, input_shape=(2,), use_bias=False)
 
     ################################## Define Custom Layers ##################################
     # Define repeat element layer
     custom_repeat_layer = Lambda(lambda x: K.repeat_elements(x, hparams.max_context_len, 1))
-    custom_repeat_layer2= Lambda(lambda x: K.repeat_elements(x, hparams.num_utterance_options, 1))
+    custom_repeat_layer2= Lambda(lambda x: K.repeat_elements(x, hparams.num_utterance_options+hparams.num_kb_entities, 1))
 
     # Expand dimension layer
     expand_dim_layer = Lambda(lambda x: K.expand_dims(x, axis=1))
@@ -81,12 +101,12 @@ def memLstm_custom_model(hparams, context, context_mask, utterances):
     Stack = Lambda(lambda x: K.stack(x, axis=1))
 
     # Naming tensors
-    responses_dot_layer = Lambda(lambda x: x, name='responses_dot')
+    kb_attention_layer = Lambda(lambda x: x, name='kb_attention')
     responses_attention_layer = Lambda(lambda x: x, name='responses_attention')
     context_attention_layer = Lambda(lambda x: x, name='context_attention')
 
     # Concat = Lambda(lambda x: K.concatenate(x, axis=1))
-    
+
     # Sum up last dimension
     Sum = Lambda(lambda x: K.sum(x, axis=-1))
     Sum2= Lambda(lambda x: K.sum(x, axis=1))
@@ -96,9 +116,13 @@ def memLstm_custom_model(hparams, context, context_mask, utterances):
 
     # Define tensor slice layer
     GetFirstHalfTensor = Lambda(lambda x: x[:, :, :hparams.memn2n_rnn_dim])
-    GetFirstTensor = Lambda(lambda x: x[:, 0, :])
     GetLastHalfTensor = Lambda(lambda x: x[:, :, hparams.memn2n_rnn_dim:])
+
+    GetFirstTensor = Lambda(lambda x: x[:, 0, :])
     GetLastTensor = Lambda(lambda x: x[:, -1, :])
+
+    GetUtterancesTensor = Lambda(lambda x: x[:, :hparams.num_utterance_options, :])
+    GetKbTensor = Lambda(lambda x: x[:, hparams.num_utterance_options:, :])
 
     GetReverseTensor = Lambda(lambda x: K.reverse(x, axes=1))
 
@@ -107,10 +131,11 @@ def memLstm_custom_model(hparams, context, context_mask, utterances):
     utterances_mask = Reshape((1,hparams.max_context_len))(context_mask)
     utterances_mask = custom_repeat_layer2(utterances_mask)
     context_mask = Reshape((hparams.max_context_len,1))(context_mask)
+    kb_mask = Reshape((1,hparams.num_kb_entities))(kb_mask)
 
     # Context Embedding: (BATCH_SIZE(?) x CONTEXT_LEN x EMBEDDING_DIM)
     context_embedded = embedding_context_layer(context)
-    print("context_embedded: ", context_embedded.shape)
+    print("context_embedded: ", context_embedded._keras_shape)
     print("context_embedded (history): ", context_embedded._keras_history, '\n')
     # Skip this?
     # context_embedded = Concatenate(axis=-1)([context_embedded, context_speaker])
@@ -120,9 +145,15 @@ def memLstm_custom_model(hparams, context, context_mask, utterances):
     utterances_embedded = TimeDistributed(embedding_utterance_layer,
                                             input_shape=(hparams.num_utterance_options,
                                                         hparams.max_utterance_len))(utterances)
-    print("Utterances_embedded: ", utterances_embedded.shape)
+    print("Utterances_embedded: ", utterances_embedded._keras_shape)
     print("Utterances_embedded (history): ", utterances_embedded._keras_history, '\n')
 
+    # KB embedding: (? x NUM_KB_ENTITIES x MAX_KB_LEN x EMBEDING_DIM)
+    kb_entities_embedded = TimeDistributed(embedding_kb_layer,
+                                            input_shape=(hparams.num_kb_entities,
+                                                        hparams.max_kb_len))(kb_entities)
+    print("KB_entities_embedded: ", kb_entities_embedded._keras_shape)
+    print("KB_entities_embedded: (history)", kb_entities_embedded._keras_history, '\n')
 
 
     # Encode context A: (BATCH_SIZE(?) x CONTEXT_LEN x RNN_DIM)
@@ -130,7 +161,7 @@ def memLstm_custom_model(hparams, context, context_mask, utterances):
     all_context_encoded_Forward_h,\
     all_context_encoded_Forward_c = LSTM_A(context_embedded)
 
-    
+
     all_context_encoded_Backward,\
     all_context_encoded_Backward_h,\
     all_context_encoded_Backward_c = LSTM_A(Masking()(GetReverseTensor(context_embedded)))#,
@@ -138,10 +169,14 @@ def memLstm_custom_model(hparams, context, context_mask, utterances):
     all_context_encoded_Backward = Masking()(GetReverseTensor(all_context_encoded_Backward))
 
     # print("context_encoded_A: ", len(context_encoded_A))
-    print("all_context_encoded_Forward: ", all_context_encoded_Forward.shape)
+    print("all_context_encoded_Forward: ", all_context_encoded_Forward._keras_shape)
     print("all_context_encoded_Forward (history): ", all_context_encoded_Forward._keras_history)
-    print("all_context_encoded_Backward: ", all_context_encoded_Backward.shape)
+    print("all_context_encoded_Backward: ", all_context_encoded_Backward._keras_shape)
     print("all_context_encoded_Backward (history): ", all_context_encoded_Backward._keras_history, '\n')
+
+    # Define bi-directional tensor
+    all_context_encoded_Bidir = Add()([all_context_encoded_Forward,
+                                        all_context_encoded_Backward])
 
 
     # Encode utterances B: (BATCH_SIZE(?) x NUM_OPTIONS(100) x RNN_DIM)
@@ -152,25 +187,43 @@ def memLstm_custom_model(hparams, context, context_mask, utterances):
     # all_utterances_encoded_B = TimeDistributed(Dense_1,
     #                                     input_shape=(hparams.num_utterance_options,
     #                                                 hparams.memn2n_rnn_dim))(all_utterances_encoded_B)
-    print("all_utterances_encoded_B: ", all_utterances_encoded_B.shape)
+    print("all_utterances_encoded_B: ", all_utterances_encoded_B._keras_shape)
     print("all_utterances_encoded_B: (history)", all_utterances_encoded_B._keras_history, '\n')
 
 
+    # Encode utterances B: (BATCH_SIZE(?) x NUM_OPTIONS(100) x RNN_DIM)
+    all_kb_encoded_K = TimeDistributed(LSTM_K,
+                                        input_shape=(hparams.num_kb_entities,
+                                                    hparams.max_kb_len,
+                                                    hparams.memn2n_embedding_dim))(kb_entities_embedded)
+    # all_utterances_encoded_B = TimeDistributed(Dense_1,
+    #                                     input_shape=(hparams.num_utterance_options,
+    #                                                 hparams.memn2n_rnn_dim))(all_utterances_encoded_B)
+    print("all_kb_encoded_K: ", all_kb_encoded_K._keras_shape)
+    print("all_kb_encoded_K: (history)", all_kb_encoded_K._keras_history, '\n')
+
+
+    # Stack all utterances and kb entities: (? x (NUM_OPTIONS+NUM_KBs) x RNN_DIM)
+    all_utterances_kb_encoded = Concatenate(axis=1)([all_utterances_encoded_B,
+                                                        all_kb_encoded_K])
+    print("all_utterances_kb_encoded: ", all_utterances_kb_encoded._keras_shape)
+    print("all_utterances_kb_encoded: (history)", all_utterances_kb_encoded._keras_history, '\n')
+
+
     responses_attention = []
-    responses_dot = []
+    kb_attention = []
     for i in range(hparams.hops):
         print(str(i+1) + 'th hop:')
         # 1st Attention & Weighted Sum
         # between Utterances_B(NUM_OPTIONS x RNN_DIM) and Contexts_encoded_Forward(CONTEXT_LEN x RNN_DIM)
         # and apply Softmax
-        # (Output shape: BATCH_SIZE(?) x NUM_OPTIONS(100) x CONTEXT_LEN)
-        attention_Forward = Dot(axes=[2,2])([all_utterances_encoded_B,
+        # (Output shape: BATCH_SIZE(?) x (NUM_OPTIONS + NUM_KB) x CONTEXT_LEN)
+        attention_Forward = Dot(axes=[2,2])([all_utterances_kb_encoded,
                                                 all_context_encoded_Forward])
-        dot_Forward = attention_Forward
         attention_Forward = amplify_layer(attention_Forward)
         attention_Forward = Add()([attention_Forward, utterances_mask])
         attention_Forward = softmax_layer(attention_Forward)
-        print("attention_Forward: ", attention_Forward.shape)
+        print("attention_Forward: ", attention_Forward._keras_shape)
         print("attention_Forward: (history)", attention_Forward._keras_history)
 
         # between Attention(NUM_OPTIONS x CONTEXT_LEN) and Contexts_A(CONTEXT_LEN x RNN_DIM)
@@ -178,25 +231,25 @@ def memLstm_custom_model(hparams, context, context_mask, utterances):
         # (Output shape: BATCH_SIZE(?) x NUM_OPTIONS(100) x RNN_DIM)
         weighted_sum_Forward = Dot(axes=[2,1])([attention_Forward,
                                                     all_context_encoded_Forward])
-        print("weighted_sum: ", weighted_sum_Forward.shape)
+        print("weighted_sum: ", weighted_sum_Forward._keras_shape)
         print("weighted_sum: (history)", weighted_sum_Forward._keras_history, '\n')
 
         # (Output shape: ? x NUM_OPTIONS(100) x RNN_DIM)
-        all_utterances_encoded_B = Add()([weighted_sum_Forward, all_utterances_encoded_B])
+        all_utterances_kb_encoded = Add()([weighted_sum_Forward,
+                                            all_utterances_kb_encoded])
 
 
         # 2nd Attention & Weighted Sum
         # between Utterances_B(NUM_OPTIONS x RNN_DIM) and Contexts_encoded_Backward(CONTEXT_LEN x RNN_DIM)
         # and apply Softmax
-        # (Output shape: BATCH_SIZE(?) x NUM_OPTIONS(100) x CONTEXT_LEN)
-        attention_Backward = Dot(axes=[2,2])([all_utterances_encoded_B,
+        # (Output shape: BATCH_SIZE(?) x (NUM_OPTIONS + NUM_KB) x CONTEXT_LEN)
+        attention_Backward = Dot(axes=[2,2])([all_utterances_kb_encoded,
                                                 all_context_encoded_Backward])
-        dot_Backward = attention_Backward
         attention_Backward = amplify_layer(attention_Backward)
         attention_Backward = Add()([attention_Backward, utterances_mask])
         attention_Backward = softmax_layer(attention_Backward)
         
-        print("attention_Backward: ", attention_Backward.shape)
+        print("attention_Backward: ", attention_Backward._keras_shape)
         print("attention_Backward: (history)", attention_Backward._keras_history)
 
         # between Attention(NUM_OPTIONS x CONTEXT_LEN) and Contexts_A(CONTEXT_LEN x RNN_DIM)
@@ -208,23 +261,28 @@ def memLstm_custom_model(hparams, context, context_mask, utterances):
         print("weighted_sum_Backward: (history)", weighted_sum_Backward._keras_history, '\n')
 
         # (Output shape: ? x NUM_OPTIONS(100) x RNN_DIM)
-        all_utterances_encoded_B = Add()([weighted_sum_Backward, all_utterances_encoded_B])
+        all_utterances_kb_encoded = Add()([weighted_sum_Backward,
+                                            all_utterances_kb_encoded])
 
 
-        dot_Forward = Reshape((1,hparams.num_utterance_options,hparams.max_context_len))(dot_Forward)
-        dot_Backward= Reshape((1,hparams.num_utterance_options,hparams.max_context_len))(dot_Backward)
-        att_Forward = expand_dim_layer(attention_Forward)
-        att_Backward= expand_dim_layer(attention_Backward)
+        att_responses_Forward = expand_dim_layer( GetUtterancesTensor(attention_Forward) )
+        att_responses_Backward= expand_dim_layer( GetUtterancesTensor(attention_Backward))
+        att_kb_Forward = expand_dim_layer( GetKbTensor(attention_Forward) )
+        att_kb_Backward= expand_dim_layer( GetKbTensor(attention_Backward))
 
-        merge_dots = Concatenate(axis=1)([dot_Forward,
-                                            dot_Backward])
-        merge_responses = Concatenate(axis=1)([att_Forward,
-                                                att_Backward])
-        responses_dot.append(merge_dots)
+
+        merge_responses = Concatenate(axis=1)([att_responses_Forward,
+                                                att_responses_Backward])
+        merge_kb = Concatenate(axis=1)([att_kb_Forward,
+                                        att_kb_Backward])
+
         responses_attention.append(merge_responses)
+        kb_attention.append(merge_kb)
 
         print("repsonses_attention[i]:", merge_responses._keras_shape)
-
+        print("repsonses_attention[i]: (history)", merge_responses._keras_history)
+        print("kb_attention[i]:", merge_kb._keras_shape)
+        print("kb_attention[i]: (history)", merge_kb._keras_history, '\n')
 
         if i < hparams.hops-1:
             continue
@@ -235,36 +293,59 @@ def memLstm_custom_model(hparams, context, context_mask, utterances):
             '''
         else:
             print("hop ended")
+            # split encoded utterances & kb_entities
+            all_utterances_encoded_B = GetUtterancesTensor(all_utterances_kb_encoded)
+            all_kb_encoded_K = GetKbTensor(all_utterances_kb_encoded)
+
+            print("all_utterances_encoded_B: ", all_utterances_encoded_B._keras_shape)
+            print("all_utterances_encoded_B: (history)", all_utterances_encoded_B._keras_history, '\n')
+            print("all_kb_encoded_K: ", all_utterances_encoded_B._keras_shape)
+            print("all_kb_encoded_K: (history)", all_utterances_encoded_B._keras_history, '\n')
+
 
             ############# Attention to Context #############
             # (Output shape: ? x MAX_CONTEXT_LEN x 1)
+            aug_context_encoded_Forward = Concatenate(axis=-1)([all_context_encoded_Forward,
+                                                                kb_entity_flags])
             attention_Forward_wrt_context =\
             TimeDistributed(Dense_2,
                             input_shape=(hparams.max_context_len,
-                                        hparams.memn2n_rnn_dim))(all_context_encoded_Forward)
+                                        hparams.memn2n_rnn_dim))(aug_context_encoded_Forward)
             attention_Forward_wrt_context = amplify_layer(attention_Forward_wrt_context)
             attention_Forward_wrt_context = Add()([attention_Forward_wrt_context,
                                                     context_mask])
             attention_Forward_wrt_context = softmax_layer2(attention_Forward_wrt_context)
+            print("attention_Forward_wrt_context: ", attention_Forward_wrt_context._keras_shape)
+            print("attention_Forward_wrt_context: (history)", attention_Forward_wrt_context._keras_history)
 
             # (Output shape: ? x 1 x RNN_DIM)
             weighted_sum_Forward_wrt_context = Dot(axes=[1,1])([attention_Forward_wrt_context,
                                                                     all_context_encoded_Forward])
+            print("weighted_sum_Forward_wrt_context: ", weighted_sum_Forward_wrt_context._keras_shape)
+            print("weighted_sum_Forward_wrt_context: (history)", weighted_sum_Forward_wrt_context._keras_history, '\n')
 
 
             # (Output shape: ? x MAX_CONTEXT_LEN x 1)
+            aug_context_encoded_Backward= Concatenate(axis=-1)([all_context_encoded_Backward,
+                                                                kb_entity_flags])
             attention_Backward_wrt_context =\
             TimeDistributed(Dense_2,
                             input_shape=(hparams.max_context_len,
-                                        hparams.memn2n_rnn_dim))(all_context_encoded_Backward)
+                                        hparams.memn2n_rnn_dim))(aug_context_encoded_Backward)
             attention_Backward_wrt_context = amplify_layer(attention_Backward_wrt_context)
             attention_Backward_wrt_context = Add()([attention_Backward_wrt_context,
                                                     context_mask])
             attention_Backward_wrt_context = softmax_layer2(attention_Backward_wrt_context)
+            print("attention_Backward_wrt_context: ", attention_Backward_wrt_context._keras_shape)
+            print("attention_Backward_wrt_context: (history)", attention_Backward_wrt_context._keras_history)
 
             # (Output shape: ? x 1 x RNN_DIM)
             weighted_sum_Backward_wrt_context = Dot(axes=[1,1])([attention_Backward_wrt_context,
                                                                     all_context_encoded_Backward])
+            print("weighted_sum_Backward_wrt_context: ", weighted_sum_Backward_wrt_context._keras_shape)
+            print("weighted_sum_Backward_wrt_context: (history)", weighted_sum_Backward_wrt_context._keras_history, '\n')
+
+
             att_Forward_wrt_context = Reshape((1,hparams.max_context_len))(attention_Forward_wrt_context)
             att_Backward_wrt_context= Reshape((1,hparams.max_context_len))(attention_Backward_wrt_context)
             context_attention = Concatenate(axis=1)([att_Forward_wrt_context,
@@ -273,13 +354,49 @@ def memLstm_custom_model(hparams, context, context_mask, utterances):
 
             context_encoded_AplusC = Add()([weighted_sum_Forward_wrt_context,
                                             weighted_sum_Backward_wrt_context])
-            #context_encoded_A = Dense_1(context_encoded_A)
-            context_encoded_AplusC = Reshape((1,hparams.memn2n_rnn_dim))(context_encoded_AplusC)
+            # context_encoded_AplusC = Reshape((1,hparams.memn2n_rnn_dim))(context_encoded_AplusC)
             print("context_encoded_AplusC: ", context_encoded_AplusC.shape)
             print("context_encoded_AplusC: (history)", context_encoded_AplusC._keras_history, '\n')
 
+
+            # (output shape: ? x 1 x NUM_KB_ENTITIES)
+            kb_score = Dot(axes=[2,2])([context_encoded_AplusC,
+                                            all_kb_encoded_K])
+            kb_score = amplify_layer(kb_score)
+            kb_score = Add()([kb_score, kb_mask])
+            kb_score = softmax_layer(kb_score)
+            print("kb_score: ", kb_score._keras_shape)
+            print("kb_score: (history)", kb_score._keras_history)
+
+            # (output shape: ? x 1 x RNN_DIM)
+            kb_weighted_sum = Dot(axes=[2,1])([kb_score, all_kb_encoded_K])
+            print("kb_weighted_sum: ", kb_weighted_sum._keras_shape)
+            print("kb_weighted_sum: (history)", kb_weighted_sum._keras_history, '\n')
+
+
+            ########## Normal Sum or Wighted Sum between context and external knowledge ##########
+            ### Normal Sum ###
+            # context_encoded_AplusCplusKB = Add()([context_encoded_AplusC,
+            #                                         kb_weighted_sum])
+
+            ### Weighted Sum ###
+            context_encoded_AplusCplusKB = Concatenate(axis=1)([context_encoded_AplusC,
+                                                                kb_weighted_sum])
+            context_encoded_AplusCplusKB = Permute((2,1),
+                                                    input_shape=(2,hparams.memn2n_rnn_dim))(context_encoded_AplusCplusKB)
+            print("context_encoded_AplusCplusKB: ", context_encoded_AplusCplusKB.shape)
+            print("context_encoded_AplusCplusKB: (history)", context_encoded_AplusCplusKB._keras_history, '\n')
+
+            context_encoded_AplusCplusKB = TimeDistributed(Dense_3,
+                                                            input_shape=(hparams.memn2n_rnn_dim,2))(context_encoded_AplusCplusKB)
+            context_encoded_AplusCplusKB = Permute((2,1),
+                                                    input_shape=(hparams.memn2n_rnn_dim,1))(context_encoded_AplusCplusKB)
+            
+            print("context_encoded_AplusCplusKB: ", context_encoded_AplusCplusKB.shape)
+            print("context_encoded_AplusCplusKB: (history)", context_encoded_AplusCplusKB._keras_history, '\n')
+
             # (Output shape: ? x 1 x NUM_OPTIONS(100))
-            logits = Dot(axes=[2,2])([context_encoded_AplusC, all_utterances_encoded_B])
+            logits = Dot(axes=[2,2])([context_encoded_AplusCplusKB, all_utterances_encoded_B])
             logits = Reshape((hparams.num_utterance_options,))(logits)
             print("logits: ", logits.shape)
             print("logits: (history)", logits._keras_history, '\n')
@@ -294,17 +411,18 @@ def memLstm_custom_model(hparams, context, context_mask, utterances):
     # Return probabilities(likelihoods) of each of utterances
     # Those will be used to calculate the loss ('sparse_categorical_crossentropy')
     if hparams.hops == 1:
-        responses_dot = Reshape((1,2,hparams.num_utterance_options,hparams.max_context_len))(responses_dot[0])
-        responses_attention = Reshape((1,2,hparams.num_utterance_options,hparams.max_context_len))(responses_attention[0])
+        responses_attention = expand_dim_layer(responses_attention[0])
+        kb_attention = expand_dim_layer(kb_attention[0])
 
     else:
-        responses_dot = Stack(responses_dot)
         responses_attention = Stack(responses_attention)
+        kb_attention = Stack(kb_attention)
 
 
-    responses_dot = responses_dot_layer(responses_dot)
-    responses_attention = responses_attention_layer(responses_attention)
     context_attention = context_attention_layer(context_attention)
-    print("repsonses_attention:", responses_attention._keras_shape)
+    responses_attention = responses_attention_layer(responses_attention)
+    kb_attention = kb_attention_layer(kb_attention)
     print("context_attention:", context_attention._keras_shape)
-    return probs, context_attention, responses_attention, responses_dot
+    print("repsonses_attention:", responses_attention._keras_shape)
+    print("kb_attention:", kb_attention._keras_shape)
+    return probs, context_attention, responses_attention, kb_attention
