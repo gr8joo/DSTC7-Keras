@@ -47,7 +47,8 @@ class hyper_parameters:
         self.vocab_path = '/ext2/dstc7/data/ubuntu/ubuntu_uKB_test_lemma_vocab.txt'
 
         # Locations of weights
-        self.weights_path = '/tmp/weights/'
+        # self.weights_path = '/tmp/weights/'
+        self.weights_path = '/home/shkim/Codes/dstc7-keras/weights'
 
         ########## Data Variants ##########
         # Locations of digitized sentences of training/valdiation data
