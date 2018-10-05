@@ -22,10 +22,10 @@ class hyper_parameters:
         self.de_embedding_dim = 300
 
         # Memory network(n2n)
-        self.memn2n_rnn_dim = 128#64
+        self.memn2n_rnn_dim = 234#256#64
         self.memn2n_embedding_dim = 300
         self.memn2n_drop_rate = 0.3
-        self.hops = 5
+        self.hops = 3
     
         # CNN_1D
         self.cnn_rnn_dim = 64
@@ -48,10 +48,50 @@ class hyper_parameters:
 
         # Locations of weights
         # self.weights_path = '/tmp/weights/'
-        self.weights_path = '/home/shkim/Codes/dstc7-keras/weights'
+        self.weights_path = '/home/hjhwang/Codes/dstc7-keras/weights/'
 
         ########## Data Variants ##########
-        # Locations of digitized sentences of training/valdiation data
+        # Advising
+        self.train_context_path = '/ext2/dstc7/train_data/train_advising_aKB_test12/train_context.npy'
+        self.train_context_speaker_path = '/ext2/dstc7/train_data/train_advising_aKB_test12/train_context_speaker.npy'
+        self.train_context_mask_path = '/ext2/dstc7/train_data/train_advising_aKB_test12/train_context_mask.npy'
+        self.train_context_len_path = '/ext2/dstc7/train_data/train_advising_aKB_test12/train_context_len.npy'
+        
+        self.train_target_path = '/ext2/dstc7/train_data/train_advising/train_target.npy'
+
+        self.train_options_path = '/ext2/dstc7/train_data/train_advising_aKB_test12/train_options.npy'
+        self.train_options_len_path = '/ext2/dstc7/train_data/train_advising_aKB_test12/train_options_len.npy'
+
+        self.train_profile_path = '/ext2/dstc7/train_data/train_advising_aKB_test12/train_profile.npy'
+        self.train_context_profile_flag_path = '/ext2/dstc7/train_data/train_advising_aKB_test12/train_context_profile_flag.npy'
+        self.train_options_profile_flag_path = '/ext2/dstc7/train_data/train_advising_aKB_test12/train_options_profile_flag.npy'
+
+        self.train_kb_path = '/ext2/dstc7/train_data/train_advising_aKB_test12/train_KB.npy'
+        self.train_kb_flag_path = '/ext2/dstc7/train_data/train_advising_aKB_test12/train_KB_flag.npy'
+        self.train_kb_mask_path = '/ext2/dstc7/train_data/train_advising_aKB_test12/train_KB_mask.npy'
+
+
+        self.valid_context_path = '/ext2/dstc7/valid_data/valid_advising_aKB_test12/valid_context.npy'
+        self.valid_context_speaker_path = '/ext2/dstc7/valid_data/valid_advising_aKB_test12/valid_context_speaker.npy'
+        self.valid_context_mask_path = '/ext2/dstc7/valid_data/valid_advising_aKB_test12/valid_context_mask.npy'
+        self.valid_context_len_path = '/ext2/dstc7/valid_data/valid_advising_aKB_test12/valid_context_len.npy'
+
+        self.valid_target_path = '/ext2/dstc7/valid_data/valid_advising/valid_target.npy'
+
+        self.valid_options_path = '/ext2/dstc7/valid_data/valid_advising_aKB_test12/valid_options.npy'
+        self.valid_options_len_path = '/ext2/dstc7/valid_data/valid_advising_aKB_test12/valid_options_len.npy'
+
+        self.valid_profile_path = '/ext2/dstc7/valid_data/valid_advising_aKB_test12/valid_profile.npy'
+        self.valid_context_profile_flag_path = '/ext2/dstc7/valid_data/valid_advising_aKB_test12/valid_context_profile_flag.npy'
+        self.valid_options_profile_flag_path = '/ext2/dstc7/valid_data/valid_advising_aKB_test12/valid_options_profile_flag.npy'
+
+        self.valid_kb_path = '/ext2/dstc7/valid_data/valid_advising_aKB_test12/valid_KB.npy'
+        self.valid_kb_flag_path = '/ext2/dstc7/valid_data/valid_advising_aKB_test12/valid_KB_flag.npy'
+        self.valid_kb_mask_path = '/ext2/dstc7/valid_data/valid_advising_aKB_test12/valid_KB_mask.npy'
+
+
+        '''
+        # Ubuntu
         self.train_context_path = '/ext2/dstc7/train_data/train_ubuntu_uKB_test/train_context.npy'#  'valid_data/valid_context.npy'#
         self.train_context_speaker_path = '/ext2/dstc7/train_data/train_ubuntu_uKB_test/train_context_speaker.npy'# 'train_data/context_speaker.train'#
         self.train_context_mask_path = '/ext2/dstc7/train_data/train_ubuntu_uKB_test/train_context_mask.npy'
@@ -101,7 +141,7 @@ class hyper_parameters:
         self.test_kb_path = '/ext2/dstc7/test_data/test_ubuntu_uKB_test/test_KB.npy'
         self.test_kb_flag_path = '/ext2/dstc7/test_data/test_ubuntu_uKB_test/test_KB_flag.npy'#'valid_data/train_ubuntu_uKB_test/valid_kb_entity_flags_path'
         self.test_kb_mask_path = '/ext2/dstc7/test_data/test_ubuntu_uKB_test/test_KB_mask.npy'
-
+        '''
 
 
 
